@@ -1,6 +1,6 @@
 # Go Clean Architecture (Learning Version)
 
-> Node: This is a modified version based on the original [go-clean-arch](https://github.com/bxcodec/go-clean-arch) project by bxcodec.
+> Note: This is a modified version based on the original [go-clean-arch](https://github.com/bxcodec/go-clean-arch) project by bxcodec.
 
 ## Changelog
 
