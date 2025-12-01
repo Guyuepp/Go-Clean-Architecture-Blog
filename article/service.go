@@ -17,6 +17,7 @@ type ArticleRepository interface {
 	Fetch(ctx context.Context, cursor string, num int64) (res []domain.Article, nextCursor string, err error)
 	GetByID(ctx context.Context, id int64) (domain.Article, error)
 	GetByTitle(ctx context.Context, title string) (domain.Article, error)
+	IncreaseViews(ctx context.Context, id int64) error
 	Update(ctx context.Context, ar *domain.Article) error
 	Store(ctx context.Context, a *domain.Article) error
 	Delete(ctx context.Context, id int64) error
@@ -117,6 +118,11 @@ func (a *Service) GetByID(ctx context.Context, id int64) (res domain.Article, er
 		return
 	}
 
+	go func() {
+		// 这里的 context.Background() 确保即使 HTTP 请求超时，计数也能增加
+		_ = a.articleRepo.IncreaseViews(context.Background(), id)
+	}()
+
 	resAuthor, err := a.authorRepo.GetByID(ctx, res.Author.ID)
 	if err != nil {
 		return domain.Article{}, err
@@ -164,4 +170,9 @@ func (a *Service) Delete(ctx context.Context, id int64) (err error) {
 		return domain.ErrNotFound
 	}
 	return a.articleRepo.Delete(ctx, id)
+}
+
+func (a *Service) IncreaseViews(ctx context.Context, id int64) (err error) {
+	err = a.articleRepo.IncreaseViews(ctx, id)
+	return
 }

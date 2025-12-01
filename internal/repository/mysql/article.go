@@ -20,7 +20,7 @@ func NewArticleRepository(conn *sql.DB) *ArticleRepository {
 	return &ArticleRepository{conn}
 }
 
-func (m *ArticleRepository) fetch(ctx context.Context, query string, args ...interface{}) (result []domain.Article, err error) {
+func (m *ArticleRepository) fetch(ctx context.Context, query string, args ...any) (result []domain.Article, err error) {
 	rows, err := m.Conn.QueryContext(ctx, query, args...)
 	if err != nil {
 		logrus.Error(err)
@@ -45,6 +45,7 @@ func (m *ArticleRepository) fetch(ctx context.Context, query string, args ...int
 			&authorID,
 			&t.UpdatedAt,
 			&t.CreatedAt,
+			&t.Views,
 		)
 
 		if err != nil {
@@ -61,7 +62,7 @@ func (m *ArticleRepository) fetch(ctx context.Context, query string, args ...int
 }
 
 func (m *ArticleRepository) Fetch(ctx context.Context, cursor string, num int64) (res []domain.Article, nextCursor string, err error) {
-	query := `SELECT id,title,content, author_id, updated_at, created_at
+	query := `SELECT id,title,content, author_id, updated_at, created_at, views
   						FROM article WHERE created_at > ? ORDER BY created_at LIMIT ? `
 
 	decodedCursor, err := repository.DecodeCursor(cursor)
@@ -81,7 +82,7 @@ func (m *ArticleRepository) Fetch(ctx context.Context, cursor string, num int64)
 	return
 }
 func (m *ArticleRepository) GetByID(ctx context.Context, id int64) (res domain.Article, err error) {
-	query := `SELECT id,title,content, author_id, updated_at, created_at
+	query := `SELECT id,title,content, author_id, updated_at, created_at, views
   						FROM article WHERE ID = ?`
 
 	list, err := m.fetch(ctx, query, id)
@@ -99,7 +100,7 @@ func (m *ArticleRepository) GetByID(ctx context.Context, id int64) (res domain.A
 }
 
 func (m *ArticleRepository) GetByTitle(ctx context.Context, title string) (res domain.Article, err error) {
-	query := `SELECT id,title,content, author_id, updated_at, created_at
+	query := `SELECT id,title,content, author_id, updated_at, created_at, views
   						FROM article WHERE title = ?`
 
 	list, err := m.fetch(ctx, query, title)
@@ -116,13 +117,13 @@ func (m *ArticleRepository) GetByTitle(ctx context.Context, title string) (res d
 }
 
 func (m *ArticleRepository) Store(ctx context.Context, a *domain.Article) (err error) {
-	query := `INSERT  article SET title=? , content=? , author_id=?, updated_at=? , created_at=?`
+	query := `INSERT  article SET title=? , content=? , author_id=?, updated_at=? , created_at=?, views=?`
 	stmt, err := m.Conn.PrepareContext(ctx, query)
 	if err != nil {
 		return
 	}
 
-	res, err := stmt.ExecContext(ctx, a.Title, a.Content, a.Author.ID, a.UpdatedAt, a.CreatedAt)
+	res, err := stmt.ExecContext(ctx, a.Title, a.Content, a.Author.ID, a.UpdatedAt, a.CreatedAt, a.Views)
 	if err != nil {
 		return
 	}
@@ -177,6 +178,27 @@ func (m *ArticleRepository) Update(ctx context.Context, ar *domain.Article) (err
 	}
 	if affect != 1 {
 		err = fmt.Errorf("weird  Behavior. Total Affected: %d", affect)
+		return
+	}
+
+	return
+}
+
+func (m *ArticleRepository) IncreaseViews(ctx context.Context, id int64) (err error) {
+	query := `UPDATE article SET views=views+1 WHERE id=?`
+
+	res, err := m.Conn.ExecContext(ctx, query, id)
+	if err != nil {
+		return
+	}
+
+	rowsAfected, err := res.RowsAffected()
+	if err != nil {
+		return
+	}
+
+	if rowsAfected != 1 {
+		err = fmt.Errorf("weird  Behavior. Total Affected: %d", rowsAfected)
 		return
 	}
 

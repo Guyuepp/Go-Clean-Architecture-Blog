@@ -12,4 +12,5 @@ type Article struct {
 	Author    Author    `json:"author"`
 	UpdatedAt time.Time `json:"updated_at"`
 	CreatedAt time.Time `json:"created_at"`
+	Views     int64     `json:"views"`
 }

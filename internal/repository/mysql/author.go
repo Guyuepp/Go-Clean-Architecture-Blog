@@ -18,7 +18,7 @@ func NewAuthorRepository(db *sql.DB) *AuthorRepository {
 	}
 }
 
-func (m *AuthorRepository) getOne(ctx context.Context, query string, args ...interface{}) (res domain.Author, err error) {
+func (m *AuthorRepository) getOne(ctx context.Context, query string, args ...any) (res domain.Author, err error) {
 	stmt, err := m.DB.PrepareContext(ctx, query)
 	if err != nil {
 		return domain.Author{}, err
