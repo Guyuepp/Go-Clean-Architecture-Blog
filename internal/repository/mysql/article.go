@@ -184,10 +184,10 @@ func (m *ArticleRepository) Update(ctx context.Context, ar *domain.Article) (err
 	return
 }
 
-func (m *ArticleRepository) IncreaseViews(ctx context.Context, id int64) (err error) {
-	query := `UPDATE article SET views=views+1 WHERE id=?`
+func (m *ArticleRepository) UpdateViews(ctx context.Context, id int64, newViews int64) (err error) {
+	query := `UPDATE article SET views=? WHERE id=?`
 
-	res, err := m.Conn.ExecContext(ctx, query, id)
+	res, err := m.Conn.ExecContext(ctx, query, newViews, id)
 	if err != nil {
 		return
 	}

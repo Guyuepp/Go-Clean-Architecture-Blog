@@ -19,7 +19,7 @@ type ArticleRepository interface {
 	Fetch(ctx context.Context, cursor string, num int64) (res []domain.Article, nextCursor string, err error)
 	GetByID(ctx context.Context, id int64) (domain.Article, error)
 	GetByTitle(ctx context.Context, title string) (domain.Article, error)
-	IncreaseViews(ctx context.Context, id int64) error
+	UpdateViews(ctx context.Context, id int64, newViews int64) error
 	Update(ctx context.Context, ar *domain.Article) error
 	Store(ctx context.Context, a *domain.Article) error
 	Delete(ctx context.Context, id int64) error
@@ -35,6 +35,7 @@ type AuthorRepository interface {
 type ArticleCache interface {
 	Get(ctx context.Context, id int64) (res domain.Article, err error)
 	Set(ctx context.Context, ar *domain.Article) (err error)
+	Incr(ctx context.Context, id int64) (views int64, err error)
 }
 
 type Service struct {
@@ -143,10 +144,19 @@ func (a *Service) GetByID(ctx context.Context, id int64) (res domain.Article, er
 		shouldSetCache = true
 	}
 
+	newViews, errInrc := a.articleCache.Incr(context.Background(), id)
+	if errInrc != nil {
+		logrus.Warnf("redis incr error: %v", errInrc)
+	} else {
+		res.Views = newViews
+	}
+
 	go func() {
 		bgCtx := context.Background()
 
-		_ = a.articleRepo.IncreaseViews(bgCtx, id)
+		if errInrc == nil && newViews%10 == 0 {
+			_ = a.articleRepo.UpdateViews(bgCtx, id, newViews)
+		}
 
 		if shouldSetCache {
 			_ = a.articleCache.Set(bgCtx, &res)
@@ -197,7 +207,6 @@ func (a *Service) Delete(ctx context.Context, id int64) (err error) {
 	return a.articleRepo.Delete(ctx, id)
 }
 
-func (a *Service) IncreaseViews(ctx context.Context, id int64) (err error) {
-	err = a.articleRepo.IncreaseViews(ctx, id)
-	return
+func (a *Service) UpdateViews(ctx context.Context, id int64, newViews int64) error {
+	return a.articleRepo.UpdateViews(ctx, id, newViews)
 }

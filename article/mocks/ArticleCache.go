@@ -42,6 +42,34 @@ func (_m *ArticleCache) Get(ctx context.Context, id int64) (domain.Article, erro
 	return r0, r1
 }
 
+// Incr provides a mock function with given fields: ctx, id
+func (_m *ArticleCache) Incr(ctx context.Context, id int64) (int64, error) {
+	ret := _m.Called(ctx, id)
+
+	if len(ret) == 0 {
+		panic("no return value specified for Incr")
+	}
+
+	var r0 int64
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64) (int64, error)); ok {
+		return rf(ctx, id)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, int64) int64); ok {
+		r0 = rf(ctx, id)
+	} else {
+		r0 = ret.Get(0).(int64)
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, int64) error); ok {
+		r1 = rf(ctx, id)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
 // Set provides a mock function with given fields: ctx, ar
 func (_m *ArticleCache) Set(ctx context.Context, ar *domain.Article) error {
 	ret := _m.Called(ctx, ar)

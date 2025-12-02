@@ -9,3 +9,4 @@ bin/
 *.out
 tmp_app/
 .env
+CONFIG

@@ -40,3 +40,8 @@ func (c *ArticleCache) Set(ctx context.Context, ar *domain.Article) (err error) 
 	err = c.client.Set(ctx, key, data, 10*time.Minute).Err()
 	return
 }
+
+func (c *ArticleCache) Incr(ctx context.Context, id int64) (int64, error) {
+	key := fmt.Sprintf("article:views:%d", id)
+	return c.client.Incr(ctx, key).Result()
+}

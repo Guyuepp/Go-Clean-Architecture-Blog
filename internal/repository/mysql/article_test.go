@@ -166,19 +166,20 @@ func TestUpdateArticle(t *testing.T) {
 	assert.NoError(t, err)
 }
 
-func TestIncreaseViews(t *testing.T) {
+func TestUpdateViews(t *testing.T) {
 	mockArticleID := int64(12)
+	mockNewViews := int64(1111)
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a stub database connection", err)
 	}
 	defer db.Close()
-	query := "UPDATE article SET views=views\\+1 WHERE id=\\?"
+	query := "UPDATE article SET views=\\? WHERE id=\\?"
 	mock.ExpectExec(query).
-		WithArgs(mockArticleID).
+		WithArgs(mockNewViews, mockArticleID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 	a := articleMysqlRepo.NewArticleRepository(db)
-	err = a.IncreaseViews(context.TODO(), mockArticleID)
+	err = a.UpdateViews(context.TODO(), mockArticleID, mockNewViews)
 	assert.NoError(t, err)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }

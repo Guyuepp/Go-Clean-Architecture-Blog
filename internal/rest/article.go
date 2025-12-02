@@ -24,7 +24,7 @@ type ArticleService interface {
 	Fetch(ctx context.Context, cursor string, num int64) ([]domain.Article, string, error)
 	GetByID(ctx context.Context, id int64) (domain.Article, error)
 	Update(ctx context.Context, ar *domain.Article) error
-	IncreaseViews(ctx context.Context, id int64) error
+	UpdateViews(ctx context.Context, id int64, newViews int64) error
 	GetByTitle(ctx context.Context, title string) (domain.Article, error)
 	Store(context.Context, *domain.Article) error
 	Delete(ctx context.Context, id int64) error

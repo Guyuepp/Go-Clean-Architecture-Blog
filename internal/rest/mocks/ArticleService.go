@@ -125,24 +125,6 @@ func (_m *ArticleService) GetByTitle(ctx context.Context, title string) (domain.
 	return r0, r1
 }
 
-// IncreaseViews provides a mock function with given fields: ctx, id
-func (_m *ArticleService) IncreaseViews(ctx context.Context, id int64) error {
-	ret := _m.Called(ctx, id)
-
-	if len(ret) == 0 {
-		panic("no return value specified for IncreaseViews")
-	}
-
-	var r0 error
-	if rf, ok := ret.Get(0).(func(context.Context, int64) error); ok {
-		r0 = rf(ctx, id)
-	} else {
-		r0 = ret.Error(0)
-	}
-
-	return r0
-}
-
 // Store provides a mock function with given fields: _a0, _a1
 func (_m *ArticleService) Store(_a0 context.Context, _a1 *domain.Article) error {
 	ret := _m.Called(_a0, _a1)
@@ -172,6 +154,24 @@ func (_m *ArticleService) Update(ctx context.Context, ar *domain.Article) error 
 	var r0 error
 	if rf, ok := ret.Get(0).(func(context.Context, *domain.Article) error); ok {
 		r0 = rf(ctx, ar)
+	} else {
+		r0 = ret.Error(0)
+	}
+
+	return r0
+}
+
+// UpdateViews provides a mock function with given fields: ctx, id, newViews
+func (_m *ArticleService) UpdateViews(ctx context.Context, id int64, newViews int64) error {
+	ret := _m.Called(ctx, id, newViews)
+
+	if len(ret) == 0 {
+		panic("no return value specified for UpdateViews")
+	}
+
+	var r0 error
+	if rf, ok := ret.Get(0).(func(context.Context, int64, int64) error); ok {
+		r0 = rf(ctx, id, newViews)
 	} else {
 		r0 = ret.Error(0)
 	}
