@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"database/sql"
 	"fmt"
 	"log"
@@ -11,8 +12,10 @@ import (
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/labstack/echo/v4"
+	"github.com/redis/go-redis/v9"
 
 	mysqlRepo "github.com/bxcodec/go-clean-arch/internal/repository/mysql"
+	myRedisCache "github.com/bxcodec/go-clean-arch/internal/repository/redis"
 
 	"github.com/bxcodec/go-clean-arch/article"
 	"github.com/bxcodec/go-clean-arch/internal/rest"
@@ -23,6 +26,7 @@ import (
 const (
 	defaultTimeout = 30
 	defaultAddress = ":9090"
+	defaultCacheDB = 0
 )
 
 func init() {
@@ -59,8 +63,36 @@ func main() {
 			log.Fatal("got error when closing the DB connection", err)
 		}
 	}()
-	// prepare echo
 
+	// prepare cache
+	cacheHost := os.Getenv("CACHE_HOST")
+	cachePort := os.Getenv("CACHE_PORT")
+	cachePass := os.Getenv("CACHE_PASS")
+	cacheDBStr := os.Getenv("CACHE_DB")
+	cacheDB, err := strconv.Atoi(cacheDBStr)
+	if err != nil {
+		log.Println("failed to parse cacheDB, using default cacheDB")
+		cacheDB = defaultCacheDB
+	}
+	client := redis.NewClient(&redis.Options{
+		Addr:     cacheHost + ":" + cachePort,
+		Password: cachePass,
+		DB:       cacheDB,
+	})
+	defer func() {
+		err = client.Close()
+		if err != nil {
+			log.Fatal("got error when closing the DB connection", err)
+		}
+	}()
+
+	_, err = client.Ping(context.Background()).Result()
+	if err != nil {
+		log.Fatal("failed to open connection to cache", err)
+		return
+	}
+
+	// prepare echo
 	e := echo.New()
 	e.Use(middleware.CORS)
 	timeoutStr := os.Getenv("CONTEXT_TIMEOUT")
@@ -75,9 +107,10 @@ func main() {
 	// Prepare Repository
 	authorRepo := mysqlRepo.NewAuthorRepository(dbConn)
 	articleRepo := mysqlRepo.NewArticleRepository(dbConn)
+	articleCache := myRedisCache.NewArticleCache(client)
 
 	// Build service Layer
-	svc := article.NewService(articleRepo, authorRepo)
+	svc := article.NewService(articleRepo, authorRepo, articleCache)
 	rest.NewArticleHandler(e, svc)
 
 	// Start Server

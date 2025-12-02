@@ -2,8 +2,10 @@ package article
 
 import (
 	"context"
+	"errors"
 	"time"
 
+	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 
@@ -30,16 +32,23 @@ type AuthorRepository interface {
 	GetByID(ctx context.Context, id int64) (domain.Author, error)
 }
 
+type ArticleCache interface {
+	Get(ctx context.Context, id int64) (res domain.Article, err error)
+	Set(ctx context.Context, ar *domain.Article) (err error)
+}
+
 type Service struct {
-	articleRepo ArticleRepository
-	authorRepo  AuthorRepository
+	articleRepo  ArticleRepository
+	authorRepo   AuthorRepository
+	articleCache ArticleCache
 }
 
 // NewService will create a new article service object
-func NewService(a ArticleRepository, ar AuthorRepository) *Service {
+func NewService(a ArticleRepository, ar AuthorRepository, ac ArticleCache) *Service {
 	return &Service{
-		articleRepo: a,
-		authorRepo:  ar,
+		articleRepo:  a,
+		authorRepo:   ar,
+		articleCache: ac,
 	}
 }
 
@@ -113,22 +122,38 @@ func (a *Service) Fetch(ctx context.Context, cursor string, num int64) (res []do
 }
 
 func (a *Service) GetByID(ctx context.Context, id int64) (res domain.Article, err error) {
-	res, err = a.articleRepo.GetByID(ctx, id)
+	res, err = a.articleCache.Get(ctx, id)
+	shouldSetCache := false
+
 	if err != nil {
-		return
+		if !errors.Is(err, redis.Nil) {
+			logrus.Warnf("cache get error: %v", err)
+		}
+
+		res, err = a.articleRepo.GetByID(ctx, id)
+		if err != nil {
+			return domain.Article{}, err
+		}
+
+		resAuthor, err := a.authorRepo.GetByID(ctx, res.Author.ID)
+		if err != nil {
+			return domain.Article{}, err
+		}
+		res.Author = resAuthor
+		shouldSetCache = true
 	}
 
 	go func() {
-		// 这里的 context.Background() 确保即使 HTTP 请求超时，计数也能增加
-		_ = a.articleRepo.IncreaseViews(context.Background(), id)
+		bgCtx := context.Background()
+
+		_ = a.articleRepo.IncreaseViews(bgCtx, id)
+
+		if shouldSetCache {
+			_ = a.articleCache.Set(bgCtx, &res)
+		}
 	}()
 
-	resAuthor, err := a.authorRepo.GetByID(ctx, res.Author.ID)
-	if err != nil {
-		return domain.Article{}, err
-	}
-	res.Author = resAuthor
-	return
+	return res, nil
 }
 
 func (a *Service) Update(ctx context.Context, ar *domain.Article) (err error) {
