@@ -24,9 +24,11 @@ import (
 )
 
 const (
-	defaultTimeout = 30
-	defaultAddress = ":9090"
-	defaultCacheDB = 0
+	defaultTimeout     = 30
+	defaultAddress     = ":9090"
+	defaultCacheDB     = 0
+	dbMaxRetry         = 10
+	dbRetryIntervalSec = 2
 )
 
 func init() {
@@ -48,18 +50,34 @@ func main() {
 	val.Add("parseTime", "1")
 	val.Add("loc", "Asia/Jakarta")
 	dsn := fmt.Sprintf("%s?%s", connection, val.Encode())
-	dbConn, err := sql.Open(`mysql`, dsn)
-	if err != nil {
-		log.Fatal("failed to open connection to database", err)
+
+	var (
+		dbConn *sql.DB
+		err    error
+	)
+
+	for i := 0; i < dbMaxRetry; i++ {
+		dbConn, err = sql.Open(`mysql`, dsn)
+		if err != nil {
+			log.Printf("failed to open connection to database (attempt %d/%d): %v", i+1, dbMaxRetry, err)
+		} else {
+			err = dbConn.Ping()
+			if err == nil {
+				break
+			}
+			log.Printf("failed to ping database (attempt %d/%d): %v", i+1, dbMaxRetry, err)
+			_ = dbConn.Close()
+		}
+
+		time.Sleep(dbRetryIntervalSec * time.Second)
 	}
-	err = dbConn.Ping()
+
 	if err != nil {
-		log.Fatal("failed to ping database ", err)
+		log.Fatal("could not connect to database after retries:", err)
 	}
 
 	defer func() {
-		err := dbConn.Close()
-		if err != nil {
+		if err := dbConn.Close(); err != nil {
 			log.Fatal("got error when closing the DB connection", err)
 		}
 	}()
