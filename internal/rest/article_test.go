@@ -1,7 +1,6 @@
 package rest_test
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -10,8 +9,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	faker "github.com/go-faker/faker/v4"
-	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -21,88 +20,100 @@ import (
 	"github.com/bxcodec/go-clean-arch/internal/rest/mocks"
 )
 
+func setupRouterWithArticleHandler(svc rest.ArticleService) *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	rest.NewArticleHandler(r, svc)
+	return r
+}
+
 func TestFetch(t *testing.T) {
 	var mockArticle domain.Article
 	err := faker.FakeData(&mockArticle)
-	assert.NoError(t, err)
-	mockUCase := new(mocks.ArticleService)
-	mockListArticle := make([]domain.Article, 0)
-	mockListArticle = append(mockListArticle, mockArticle)
-	num := 1
-	cursor := "2"
-	mockUCase.On("Fetch", mock.Anything, cursor, int64(num)).Return(mockListArticle, "10", nil)
-
-	e := echo.New()
-	req, err := http.NewRequestWithContext(context.TODO(),
-		echo.GET, "/article?num=1&cursor="+cursor, strings.NewReader(""))
-	assert.NoError(t, err)
-
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	handler := rest.ArticleHandler{
-		Service: mockUCase,
-	}
-	err = handler.FetchArticle(c)
 	require.NoError(t, err)
 
-	responseCursor := rec.Header().Get("X-Cursor")
-	assert.Equal(t, "10", responseCursor)
+	mockSvc := new(mocks.ArticleService)
+	mockList := []domain.Article{mockArticle}
+	num := 1
+	cursor := "2"
+
+	mockSvc.
+		On("Fetch", mock.Anything, cursor, int64(num)).
+		Return(mockList, "10", nil)
+
+	r := setupRouterWithArticleHandler(mockSvc)
+
+	req := httptest.NewRequest(http.MethodGet, "/articles?num=1&cursor="+cursor, nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
 	assert.Equal(t, http.StatusOK, rec.Code)
-	mockUCase.AssertExpectations(t)
+	assert.Equal(t, "10", rec.Header().Get("X-cursor"))
+
+	var got []domain.Article
+	err = json.Unmarshal(rec.Body.Bytes(), &got)
+	require.NoError(t, err)
+	require.Len(t, got, 1)
+	assert.Equal(t, mockArticle.ID, got[0].ID)
+
+	mockSvc.AssertExpectations(t)
 }
 
 func TestFetchError(t *testing.T) {
-	mockUCase := new(mocks.ArticleService)
+	mockSvc := new(mocks.ArticleService)
 	num := 1
 	cursor := "2"
-	mockUCase.On("Fetch", mock.Anything, cursor, int64(num)).Return(nil, "", domain.ErrInternalServerError)
 
-	e := echo.New()
-	req, err := http.NewRequestWithContext(context.TODO(), echo.GET, "/article?num=1&cursor="+cursor, strings.NewReader(""))
-	assert.NoError(t, err)
+	mockSvc.
+		On("Fetch", mock.Anything, cursor, int64(num)).
+		Return(nil, "", domain.ErrInternalServerError)
 
+	r := setupRouterWithArticleHandler(mockSvc)
+
+	req := httptest.NewRequest(http.MethodGet, "/articles?num=1&cursor="+cursor, nil)
 	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	handler := rest.ArticleHandler{
-		Service: mockUCase,
-	}
-	err = handler.FetchArticle(c)
-	require.NoError(t, err)
 
-	responseCursor := rec.Header().Get("X-Cursor")
-	assert.Equal(t, "", responseCursor)
+	r.ServeHTTP(rec, req)
+
 	assert.Equal(t, http.StatusInternalServerError, rec.Code)
-	mockUCase.AssertExpectations(t)
+	assert.Equal(t, "", rec.Header().Get("X-cursor"))
+
+	var resp rest.ResponseError
+	err := json.Unmarshal(rec.Body.Bytes(), &resp)
+	require.NoError(t, err)
+	assert.NotEmpty(t, resp.Message)
+
+	mockSvc.AssertExpectations(t)
 }
 
 func TestGetByID(t *testing.T) {
 	var mockArticle domain.Article
 	err := faker.FakeData(&mockArticle)
-	assert.NoError(t, err)
-
-	mockUCase := new(mocks.ArticleService)
-
-	num := int(mockArticle.ID)
-
-	mockUCase.On("GetByID", mock.Anything, int64(num)).Return(mockArticle, nil)
-
-	e := echo.New()
-	req, err := http.NewRequestWithContext(context.TODO(), echo.GET, "/article/"+strconv.Itoa(num), strings.NewReader(""))
-	assert.NoError(t, err)
-
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetPath("article/:id")
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.Itoa(num))
-	handler := rest.ArticleHandler{
-		Service: mockUCase,
-	}
-	err = handler.GetByID(c)
 	require.NoError(t, err)
 
+	mockSvc := new(mocks.ArticleService)
+	id := int64(mockArticle.ID)
+
+	mockSvc.
+		On("GetByID", mock.Anything, id).
+		Return(mockArticle, nil)
+
+	r := setupRouterWithArticleHandler(mockSvc)
+
+	req := httptest.NewRequest(http.MethodGet, "/articles/"+strconv.FormatInt(id, 10), nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
 	assert.Equal(t, http.StatusOK, rec.Code)
-	mockUCase.AssertExpectations(t)
+
+	var got domain.Article
+	err = json.Unmarshal(rec.Body.Bytes(), &got)
+	require.NoError(t, err)
+	assert.Equal(t, mockArticle.ID, got.ID)
+
+	mockSvc.AssertExpectations(t)
 }
 
 func TestStore(t *testing.T) {
@@ -113,60 +124,55 @@ func TestStore(t *testing.T) {
 		UpdatedAt: time.Now(),
 	}
 
-	tempMockArticle := mockArticle
-	tempMockArticle.ID = 0
-	mockUCase := new(mocks.ArticleService)
+	mockSvc := new(mocks.ArticleService)
 
-	j, err := json.Marshal(tempMockArticle)
-	assert.NoError(t, err)
+	// 这里期望传入任意 *domain.Article 即可
+	mockSvc.
+		On("Store", mock.Anything, mock.AnythingOfType("*domain.Article")).
+		Return(nil)
 
-	mockUCase.On("Store", mock.Anything, mock.AnythingOfType("*domain.Article")).Return(nil)
+	r := setupRouterWithArticleHandler(mockSvc)
 
-	e := echo.New()
-	req, err := http.NewRequestWithContext(context.TODO(), echo.POST, "/article", strings.NewReader(string(j)))
-	assert.NoError(t, err)
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetPath("/article")
-
-	handler := rest.ArticleHandler{
-		Service: mockUCase,
-	}
-	err = handler.Store(c)
+	bodyBytes, err := json.Marshal(mockArticle)
 	require.NoError(t, err)
 
+	req := httptest.NewRequest(http.MethodPost, "/articles", strings.NewReader(string(bodyBytes)))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
 	assert.Equal(t, http.StatusCreated, rec.Code)
-	mockUCase.AssertExpectations(t)
+
+	var got domain.Article
+	err = json.Unmarshal(rec.Body.Bytes(), &got)
+	require.NoError(t, err)
+	assert.Equal(t, mockArticle.Title, got.Title)
+
+	mockSvc.AssertExpectations(t)
 }
 
 func TestDelete(t *testing.T) {
 	var mockArticle domain.Article
 	err := faker.FakeData(&mockArticle)
-	assert.NoError(t, err)
-
-	mockUCase := new(mocks.ArticleService)
-
-	num := int(mockArticle.ID)
-
-	mockUCase.On("Delete", mock.Anything, int64(num)).Return(nil)
-
-	e := echo.New()
-	req, err := http.NewRequestWithContext(context.TODO(), echo.DELETE, "/article/"+strconv.Itoa(num), strings.NewReader(""))
-	assert.NoError(t, err)
-
-	rec := httptest.NewRecorder()
-	c := e.NewContext(req, rec)
-	c.SetPath("article/:id")
-	c.SetParamNames("id")
-	c.SetParamValues(strconv.Itoa(num))
-	handler := rest.ArticleHandler{
-		Service: mockUCase,
-	}
-	err = handler.Delete(c)
 	require.NoError(t, err)
 
+	mockSvc := new(mocks.ArticleService)
+	id := int64(mockArticle.ID)
+
+	mockSvc.
+		On("Delete", mock.Anything, id).
+		Return(nil)
+
+	r := setupRouterWithArticleHandler(mockSvc)
+
+	req := httptest.NewRequest(http.MethodDelete, "/articles/"+strconv.FormatInt(id, 10), nil)
+	rec := httptest.NewRecorder()
+
+	r.ServeHTTP(rec, req)
+
 	assert.Equal(t, http.StatusNoContent, rec.Code)
-	mockUCase.AssertExpectations(t)
+	assert.Empty(t, rec.Body.String())
+
+	mockSvc.AssertExpectations(t)
 }

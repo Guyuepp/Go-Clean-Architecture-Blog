@@ -10,8 +10,8 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
-	"github.com/labstack/echo/v4"
 	"github.com/redis/go-redis/v9"
 
 	mysqlRepo "github.com/bxcodec/go-clean-arch/internal/repository/mysql"
@@ -110,9 +110,9 @@ func main() {
 		return
 	}
 
-	// prepare echo
-	e := echo.New()
-	e.Use(middleware.CORS)
+	// prepare gin
+	route := gin.Default()
+	route.Use(middleware.CORS())
 	timeoutStr := os.Getenv("CONTEXT_TIMEOUT")
 	timeout, err := strconv.Atoi(timeoutStr)
 	if err != nil {
@@ -120,7 +120,7 @@ func main() {
 		timeout = defaultTimeout
 	}
 	timeoutContext := time.Duration(timeout) * time.Second
-	e.Use(middleware.SetRequestContextWithTimeout(timeoutContext))
+	route.Use(middleware.SetRequestContextWithTimeout(timeoutContext))
 
 	// Prepare Repository
 	authorRepo := mysqlRepo.NewAuthorRepository(dbConn)
@@ -129,12 +129,12 @@ func main() {
 
 	// Build service Layer
 	svc := article.NewService(articleRepo, authorRepo, articleCache)
-	rest.NewArticleHandler(e, svc)
+	rest.NewArticleHandler(route, svc)
 
 	// Start Server
 	address := os.Getenv("SERVER_ADDRESS")
 	if address == "" {
 		address = defaultAddress
 	}
-	log.Fatal(e.Start(address)) //nolint
+	log.Fatal(route.Run(address)) //nolint
 }

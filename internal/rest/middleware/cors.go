@@ -1,11 +1,17 @@
 package middleware
 
-import "github.com/labstack/echo/v4"
+import "github.com/gin-gonic/gin"
 
 // CORS will handle the CORS middleware
-func CORS(next echo.HandlerFunc) echo.HandlerFunc {
-	return func(c echo.Context) error {
-		c.Response().Header().Set("Access-Control-Allow-Origin", "*")
-		return next(c)
+func CORS() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+
+		if c.Request.Method == "OPTIONS" {
+			c.Status(204)
+			return
+		}
+
+		c.Next()
 	}
 }

@@ -4,19 +4,17 @@ import (
 	"context"
 	"time"
 
-	echo "github.com/labstack/echo/v4"
+	"github.com/gin-gonic/gin"
 )
 
 // SetRequestContextWithTimeout will set the request context with timeout for every incoming HTTP Request
-func SetRequestContextWithTimeout(d time.Duration) echo.MiddlewareFunc {
-	return func(next echo.HandlerFunc) echo.HandlerFunc {
-		return func(c echo.Context) error {
-			ctx, cancel := context.WithTimeout(c.Request().Context(), d)
-			defer cancel()
+func SetRequestContextWithTimeout(d time.Duration) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		ctx, cancel := context.WithTimeout(c.Request.Context(), d)
+		defer cancel()
 
-			newRequest := c.Request().WithContext(ctx)
-			c.SetRequest(newRequest)
-			return next(c)
-		}
+		c.Request = c.Request.WithContext(ctx)
+
+		c.Next()
 	}
 }
