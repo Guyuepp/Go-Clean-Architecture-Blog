@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"log"
 	"net/url"
@@ -13,6 +12,8 @@ import (
 	"github.com/gin-gonic/gin"
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/redis/go-redis/v9"
+	"gorm.io/driver/mysql"
+	"gorm.io/gorm"
 
 	mysqlRepo "github.com/bxcodec/go-clean-arch/internal/repository/mysql"
 	myRedisCache "github.com/bxcodec/go-clean-arch/internal/repository/redis"
@@ -52,21 +53,26 @@ func main() {
 	dsn := fmt.Sprintf("%s?%s", connection, val.Encode())
 
 	var (
-		dbConn *sql.DB
-		err    error
+		db  *gorm.DB
+		err error
 	)
 
-	for i := 0; i < dbMaxRetry; i++ {
-		dbConn, err = sql.Open(`mysql`, dsn)
+	for i := range dbMaxRetry {
+		db, err = gorm.Open(mysql.Open(dsn), &gorm.Config{})
 		if err != nil {
 			log.Printf("failed to open connection to database (attempt %d/%d): %v", i+1, dbMaxRetry, err)
 		} else {
-			err = dbConn.Ping()
+			sqlDB, err := db.DB()
+			if err != nil {
+				log.Printf("failed to get sql.DB from gorm.DB (attempt %d/%d): %v", i+1, dbMaxRetry, err)
+				continue
+			}
+			err = sqlDB.Ping()
 			if err == nil {
 				break
 			}
 			log.Printf("failed to ping database (attempt %d/%d): %v", i+1, dbMaxRetry, err)
-			_ = dbConn.Close()
+			_ = sqlDB.Close()
 		}
 
 		time.Sleep(dbRetryIntervalSec * time.Second)
@@ -77,7 +83,11 @@ func main() {
 	}
 
 	defer func() {
-		if err := dbConn.Close(); err != nil {
+		sqlDB, err := db.DB()
+		if err != nil {
+			log.Fatal("got error when getting sql.DB from gorm.DB", err)
+		}
+		if err := sqlDB.Close(); err != nil {
 			log.Fatal("got error when closing the DB connection", err)
 		}
 	}()
@@ -123,12 +133,12 @@ func main() {
 	route.Use(middleware.SetRequestContextWithTimeout(timeoutContext))
 
 	// Prepare Repository
-	authorRepo := mysqlRepo.NewAuthorRepository(dbConn)
-	articleRepo := mysqlRepo.NewArticleRepository(dbConn)
+	userRepo := mysqlRepo.NewUserRepository(db)
+	articleRepo := mysqlRepo.NewArticleRepository(db)
 	articleCache := myRedisCache.NewArticleCache(client)
 
 	// Build service Layer
-	svc := article.NewService(articleRepo, authorRepo, articleCache)
+	svc := article.NewService(articleRepo, userRepo, articleCache)
 	rest.NewArticleHandler(route, svc)
 
 	// Start Server

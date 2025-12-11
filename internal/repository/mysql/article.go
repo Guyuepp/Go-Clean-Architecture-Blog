@@ -2,204 +2,117 @@ package mysql
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 
-	"github.com/sirupsen/logrus"
+	"gorm.io/gorm"
 
 	"github.com/bxcodec/go-clean-arch/domain"
 	"github.com/bxcodec/go-clean-arch/internal/repository"
+	"github.com/bxcodec/go-clean-arch/internal/repository/mysql/model"
 )
 
 type ArticleRepository struct {
-	Conn *sql.DB
+	DB *gorm.DB
 }
 
 // NewArticleRepository will create an object that represent the article.Repository interface
-func NewArticleRepository(conn *sql.DB) *ArticleRepository {
-	return &ArticleRepository{conn}
-}
-
-func (m *ArticleRepository) fetch(ctx context.Context, query string, args ...any) (result []domain.Article, err error) {
-	rows, err := m.Conn.QueryContext(ctx, query, args...)
-	if err != nil {
-		logrus.Error(err)
-		return nil, err
-	}
-
-	defer func() {
-		errRow := rows.Close()
-		if errRow != nil {
-			logrus.Error(errRow)
-		}
-	}()
-
-	result = make([]domain.Article, 0)
-	for rows.Next() {
-		t := domain.Article{}
-		authorID := int64(0)
-		err = rows.Scan(
-			&t.ID,
-			&t.Title,
-			&t.Content,
-			&authorID,
-			&t.UpdatedAt,
-			&t.CreatedAt,
-			&t.Views,
-		)
-
-		if err != nil {
-			logrus.Error(err)
-			return nil, err
-		}
-		t.Author = domain.Author{
-			ID: authorID,
-		}
-		result = append(result, t)
-	}
-
-	return result, nil
+func NewArticleRepository(db *gorm.DB) *ArticleRepository {
+	return &ArticleRepository{db}
 }
 
 func (m *ArticleRepository) Fetch(ctx context.Context, cursor string, num int64) (res []domain.Article, nextCursor string, err error) {
-	query := `SELECT id,title,content, author_id, updated_at, created_at, views
-  						FROM article WHERE created_at > ? ORDER BY created_at LIMIT ? `
-
+	var articles []model.Article
 	decodedCursor, err := repository.DecodeCursor(cursor)
 	if err != nil && cursor != "" {
 		return nil, "", domain.ErrBadParamInput
 	}
 
-	res, err = m.fetch(ctx, query, decodedCursor, num)
+	repository.PageVerify(&num)
+	err = m.DB.WithContext(ctx).Where("created_at > ?", decodedCursor).
+		Order("created_at").
+		Limit(int(num)).
+		Find(&articles).
+		Error
+
 	if err != nil {
-		return nil, "", err
+		return
 	}
 
+	for _, article := range articles {
+		res = append(res, article.ToDomain())
+	}
 	if len(res) == int(num) {
 		nextCursor = repository.EncodeCursor(res[len(res)-1].CreatedAt)
 	}
-
 	return
 }
+
 func (m *ArticleRepository) GetByID(ctx context.Context, id int64) (res domain.Article, err error) {
-	query := `SELECT id,title,content, author_id, updated_at, created_at, views
-  						FROM article WHERE ID = ?`
-
-	list, err := m.fetch(ctx, query, id)
+	var article model.Article
+	err = m.DB.WithContext(ctx).First(&article, "id = ?", id).Error
 	if err != nil {
-		return domain.Article{}, err
-	}
-
-	if len(list) > 0 {
-		res = list[0]
-	} else {
 		return res, domain.ErrNotFound
 	}
-
+	res = article.ToDomain()
 	return
 }
 
 func (m *ArticleRepository) GetByTitle(ctx context.Context, title string) (res domain.Article, err error) {
-	query := `SELECT id,title,content, author_id, updated_at, created_at, views
-  						FROM article WHERE title = ?`
-
-	list, err := m.fetch(ctx, query, title)
+	var article model.Article
+	err = m.DB.WithContext(ctx).First(&article, "title = ?", title).Error
 	if err != nil {
-		return
-	}
-
-	if len(list) > 0 {
-		res = list[0]
-	} else {
 		return res, domain.ErrNotFound
 	}
+	res = article.ToDomain()
 	return
 }
 
 func (m *ArticleRepository) Store(ctx context.Context, a *domain.Article) (err error) {
-	query := `INSERT  article SET title=? , content=? , author_id=?, updated_at=? , created_at=?, views=?`
-	stmt, err := m.Conn.PrepareContext(ctx, query)
-	if err != nil {
-		return
+	articleModel := model.FromDomain(a)
+	result := m.DB.WithContext(ctx).Create(&articleModel)
+	if result.Error != nil {
+		return result.Error
 	}
-
-	res, err := stmt.ExecContext(ctx, a.Title, a.Content, a.Author.ID, a.UpdatedAt, a.CreatedAt, a.Views)
-	if err != nil {
-		return
-	}
-	lastID, err := res.LastInsertId()
-	if err != nil {
-		return
-	}
-	a.ID = lastID
+	a.ID = articleModel.ID
 	return
 }
 
-func (m *ArticleRepository) Delete(ctx context.Context, id int64) (err error) {
-	query := "DELETE FROM article WHERE id = ?"
+func (m *ArticleRepository) Delete(ctx context.Context, id int64) error {
+	result := m.DB.WithContext(ctx).Delete(&model.Article{}, id)
 
-	stmt, err := m.Conn.PrepareContext(ctx, query)
-	if err != nil {
-		return
+	if result.Error != nil {
+		return result.Error
 	}
 
-	res, err := stmt.ExecContext(ctx, id)
-	if err != nil {
-		return
+	if result.RowsAffected == 0 {
+		return domain.ErrNotFound
 	}
 
-	rowsAfected, err := res.RowsAffected()
-	if err != nil {
-		return
-	}
-
-	if rowsAfected != 1 {
-		err = fmt.Errorf("weird  Behavior. Total Affected: %d", rowsAfected)
-		return
-	}
-
-	return
+	return nil
 }
+
 func (m *ArticleRepository) Update(ctx context.Context, ar *domain.Article) (err error) {
-	query := `UPDATE article set title=?, content=?, author_id=?, updated_at=? WHERE ID = ?`
-
-	stmt, err := m.Conn.PrepareContext(ctx, query)
-	if err != nil {
-		return
+	articleModel := model.FromDomain(ar)
+	result := m.DB.WithContext(ctx).Model(&articleModel).Updates(&articleModel)
+	if result.Error != nil {
+		return result.Error
 	}
 
-	res, err := stmt.ExecContext(ctx, ar.Title, ar.Content, ar.Author.ID, ar.UpdatedAt, ar.ID)
-	if err != nil {
-		return
-	}
-	affect, err := res.RowsAffected()
-	if err != nil {
-		return
-	}
-	if affect != 1 {
-		err = fmt.Errorf("weird  Behavior. Total Affected: %d", affect)
-		return
+	if result.RowsAffected == 0 {
+		return domain.ErrNotFound
 	}
 
 	return
 }
 
 func (m *ArticleRepository) UpdateViews(ctx context.Context, id int64, newViews int64) (err error) {
-	query := `UPDATE article SET views=? WHERE id=?`
-
-	res, err := m.Conn.ExecContext(ctx, query, newViews, id)
-	if err != nil {
-		return
+	result := m.DB.WithContext(ctx).Model(&model.Article{}).Where("id = ?", id).Update("views", newViews)
+	if result.Error != nil {
+		return fmt.Errorf("failed to update views: %w", result.Error)
 	}
 
-	rowsAfected, err := res.RowsAffected()
-	if err != nil {
-		return
-	}
-
-	if rowsAfected != 1 {
-		err = fmt.Errorf("weird  Behavior. Total Affected: %d", rowsAfected)
-		return
+	if result.RowsAffected == 0 {
+		return domain.ErrNotFound
 	}
 
 	return

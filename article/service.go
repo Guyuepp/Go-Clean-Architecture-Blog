@@ -25,10 +25,10 @@ type ArticleRepository interface {
 	Delete(ctx context.Context, id int64) error
 }
 
-// AuthorRepository represent the author's repository contract
+// UserRepository represent the user's repository contract
 //
-//go:generate mockery --name AuthorRepository
-type AuthorRepository interface {
+//go:generate mockery --name UserRepository
+type UserRepository interface {
 	GetByID(ctx context.Context, id int64) (domain.Author, error)
 }
 
@@ -40,15 +40,15 @@ type ArticleCache interface {
 
 type Service struct {
 	articleRepo  ArticleRepository
-	authorRepo   AuthorRepository
+	authorRepo   UserRepository
 	articleCache ArticleCache
 }
 
 // NewService will create a new article service object
-func NewService(a ArticleRepository, ar AuthorRepository, ac ArticleCache) *Service {
+func NewService(a ArticleRepository, u UserRepository, ac ArticleCache) *Service {
 	return &Service{
 		articleRepo:  a,
-		authorRepo:   ar,
+		authorRepo:   u,
 		articleCache: ac,
 	}
 }

@@ -25,13 +25,13 @@ DROP TABLE IF EXISTS `article`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `article` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` bigint NOT NULL AUTO_INCREMENT,
   `title` varchar(45) COLLATE utf8_unicode_ci NOT NULL,
   `content` longtext COLLATE utf8_unicode_ci NOT NULL,
-  `author_id` int(11) DEFAULT '0',
+  `user_id` bigint DEFAULT '0',
   `updated_at` datetime DEFAULT NULL,
   `created_at` datetime DEFAULT NULL,
-  `views` int(11) DEFAULT '0',
+  `views` bigint DEFAULT '0',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=7 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
@@ -54,9 +54,9 @@ DROP TABLE IF EXISTS `article_category`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `article_category` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
-  `article_id` int(11) NOT NULL,
-  `category_id` int(11) NOT NULL,
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `article_id` bigint NOT NULL,
+  `category_id` bigint NOT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `composite` (`article_id`,`category_id`)
 ) ENGINE=InnoDB AUTO_INCREMENT=12 DEFAULT CHARSET=utf8 COLLATE=utf8_unicode_ci;
@@ -73,15 +73,17 @@ INSERT INTO `article_category` VALUES (1,1,1),(2,1,2),(3,1,3),(4,2,1),(5,2,2),(6
 UNLOCK TABLES;
 
 --
--- Table structure for table `author`
+-- Table structure for table `user`
 --
 
-DROP TABLE IF EXISTS `author`;
+DROP TABLE IF EXISTS `user`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
-CREATE TABLE `author` (
-  `id` int(11) unsigned NOT NULL AUTO_INCREMENT,
-  `name` varchar(200) COLLATE utf8_unicode_ci DEFAULT '""',
+CREATE TABLE `user` (
+  `id` bigint NOT NULL AUTO_INCREMENT,
+  `name` varchar(32) COLLATE utf8_bin NOT NULL,
+  `username` varchar(32) COLLATE utf8_bin NOT NULL,
+  `password` varchar(64) COLLATE utf8_bin NOT NULL,
   `created_at` datetime DEFAULT NULL,
   `updated_at` datetime DEFAULT NULL,
   PRIMARY KEY (`id`)
@@ -89,13 +91,13 @@ CREATE TABLE `author` (
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
--- Dumping data for table `author`
+-- Dumping data for table `user`
 --
 
-LOCK TABLES `author` WRITE;
-/*!40000 ALTER TABLE `author` DISABLE KEYS */;
-INSERT INTO `author` VALUES (1,'Iman Tumorang','2017-05-18 13:50:19','2017-05-18 13:50:19');
-/*!40000 ALTER TABLE `author` ENABLE KEYS */;
+LOCK TABLES `user` WRITE;
+/*!40000 ALTER TABLE `user` DISABLE KEYS */;
+INSERT INTO `user` VALUES (1,'Iman Tumorang', 'user1', MD5('123456'), '2017-05-18 13:50:19','2017-05-18 13:50:19');
+/*!40000 ALTER TABLE `user` ENABLE KEYS */;
 UNLOCK TABLES;
 
 --
@@ -106,7 +108,7 @@ DROP TABLE IF EXISTS `category`;
 /*!40101 SET @saved_cs_client     = @@character_set_client */;
 /*!40101 SET character_set_client = utf8 */;
 CREATE TABLE `category` (
-  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `id` bigint NOT NULL AUTO_INCREMENT,
   `name` varchar(45) COLLATE utf8_unicode_ci NOT NULL,
   `tag` varchar(45) COLLATE utf8_unicode_ci NOT NULL,
   `created_at` datetime DEFAULT NULL,
