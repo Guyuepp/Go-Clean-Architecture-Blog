@@ -1,35 +1,41 @@
 package model
 
-import "github.com/bxcodec/go-clean-arch/domain"
+import (
+	"time"
+
+	"github.com/bxcodec/go-clean-arch/domain"
+)
 
 type User struct {
-	ID        int64
-	Name      string
-	Username  string
-	Password  string
-	CreatedAt string
-	UpdatedAt string
+	ID        int64     `gorm:"primaryKey;autoIncrement"`
+	Name      string    `gorm:"type:varchar(32);not null"`
+	Username  string    `gorm:"type:varchar(32);not null"`
+	Password  string    `gorm:"type:varchar(64);not null"`
+	CreatedAt time.Time `gorm:"type:datetime"`
+	UpdatedAt time.Time `gorm:"type:datetime"`
 }
 
-func (m *User) TableName() string {
+func (User) TableName() string {
 	return "user"
 }
 
-// ToDomain turns the DTO into the domain Author struct
 func (m *User) ToDomain() domain.Author {
 	return domain.Author{
 		ID:        m.ID,
 		Name:      m.Name,
+		Username:  m.Username,
+		Password:  m.Password,
 		CreatedAt: m.CreatedAt,
 		UpdatedAt: m.UpdatedAt,
 	}
 }
 
-// FromDomain turns the domain Author struct into the DTO
-func (m *User) FromDomain(a *domain.Author) *User {
-	return &User{
+func NewUserFromDomain(a *domain.Author) User {
+	return User{
 		ID:        a.ID,
 		Name:      a.Name,
+		Username:  a.Username,
+		Password:  a.Password,
 		CreatedAt: a.CreatedAt,
 		UpdatedAt: a.UpdatedAt,
 	}

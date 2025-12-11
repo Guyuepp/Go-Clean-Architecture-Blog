@@ -7,20 +7,19 @@ import (
 )
 
 type Article struct {
-	ID        int64
-	Title     string
-	Content   string
-	UserID    int64
-	UpdatedAt time.Time
-	CreatedAt time.Time
-	Views     int64
+	ID        int64     `gorm:"primaryKey;autoIncrement"`
+	Title     string    `gorm:"type:varchar(45);not null"`
+	Content   string    `gorm:"type:longtext;not null"`
+	UserID    int64     `gorm:"column:user_id;default:0"`
+	Views     int64     `gorm:"default:0"`
+	UpdatedAt time.Time `gorm:"type:datetime"`
+	CreatedAt time.Time `gorm:"type:datetime"`
 }
 
-func (m *Article) TableName() string {
+func (Article) TableName() string {
 	return "article"
 }
 
-// ToDomain turns the DTO into the domain Article struct
 func (m *Article) ToDomain() domain.Article {
 	return domain.Article{
 		ID:        m.ID,
@@ -35,8 +34,7 @@ func (m *Article) ToDomain() domain.Article {
 	}
 }
 
-// FromDomain turns the domain Article struct into the DTO
-func FromDomain(a *domain.Article) *Article {
+func NewArticleFromDomain(a *domain.Article) *Article {
 	return &Article{
 		ID:        a.ID,
 		Title:     a.Title,

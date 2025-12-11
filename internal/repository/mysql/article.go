@@ -68,7 +68,7 @@ func (m *ArticleRepository) GetByTitle(ctx context.Context, title string) (res d
 }
 
 func (m *ArticleRepository) Store(ctx context.Context, a *domain.Article) (err error) {
-	articleModel := model.FromDomain(a)
+	articleModel := model.NewArticleFromDomain(a)
 	result := m.DB.WithContext(ctx).Create(&articleModel)
 	if result.Error != nil {
 		return result.Error
@@ -92,7 +92,7 @@ func (m *ArticleRepository) Delete(ctx context.Context, id int64) error {
 }
 
 func (m *ArticleRepository) Update(ctx context.Context, ar *domain.Article) (err error) {
-	articleModel := model.FromDomain(ar)
+	articleModel := model.NewArticleFromDomain(ar)
 	result := m.DB.WithContext(ctx).Model(&articleModel).Updates(&articleModel)
 	if result.Error != nil {
 		return result.Error
