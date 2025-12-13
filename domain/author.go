@@ -7,12 +7,12 @@ import (
 
 // User representing the User data struct
 type User struct {
-	ID        int64     `json:"id"`
-	Name      string    `json:"name"`
-	Username  string    `json:"username"`
-	Password  string    `json:"password"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID        int64
+	Name      string
+	Username  string
+	Password  string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 }
 
 type UserRepository interface {

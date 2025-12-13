@@ -4,9 +4,12 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"net/http"
 	"net/url"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -17,6 +20,7 @@ import (
 
 	mysqlRepo "github.com/bxcodec/go-clean-arch/internal/repository/mysql"
 	myRedisCache "github.com/bxcodec/go-clean-arch/internal/repository/redis"
+	"github.com/bxcodec/go-clean-arch/internal/workers"
 
 	"github.com/bxcodec/go-clean-arch/internal/rest"
 	"github.com/bxcodec/go-clean-arch/internal/rest/middleware"
@@ -153,6 +157,13 @@ func main() {
 
 	authMiddleware := middleware.AuthMiddleware(string(jwtSecret))
 
+	// Start worker
+	syncer := workers.NewSyncViewWorker(articleRepo, articleCache)
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	syncer.Start(ctx)
+
 	// Register routes
 	route.POST("/register", userHandler.Register)
 	route.POST("/login", userHandler.Login)
@@ -172,5 +183,30 @@ func main() {
 	if address == "" {
 		address = defaultAddress
 	}
-	log.Fatal(route.Run(address)) //nolint
+	srv := &http.Server{
+		Addr:    address,
+		Handler: route,
+	}
+	go func() {
+		log.Printf("Server is running on %s\n", address)
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("listen: %s\n", err) // nolint
+		}
+	}()
+
+	// shutdown
+	<-ctx.Done()
+	log.Println("Shutdown signal received, stopping server...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Fatal("Server forced to shutdown: ", err)
+	}
+
+	log.Println("Waiting for worker to cleanup...")
+	time.Sleep(2 * time.Second)
+
+	log.Println("Server exiting")
 }

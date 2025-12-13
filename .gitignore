@@ -12,3 +12,4 @@ tmp_app/
 CONFIG
 test_rest/
 *.bak
+.vscode/

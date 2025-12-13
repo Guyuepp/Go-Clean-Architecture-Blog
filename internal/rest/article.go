@@ -22,7 +22,7 @@ type ArticleService interface {
 	Fetch(ctx context.Context, cursor string, num int64) ([]domain.Article, string, error)
 	GetByID(ctx context.Context, id int64) (domain.Article, error)
 	Update(ctx context.Context, ar *domain.Article) error
-	UpdateViews(ctx context.Context, id int64, newViews int64) error
+	AddViews(ctx context.Context, id int64, newViews int64) error
 	GetByTitle(ctx context.Context, title string) (domain.Article, error)
 	Store(context.Context, *domain.Article) error
 	Delete(ctx context.Context, id int64) error
@@ -101,7 +101,6 @@ func (a *ArticleHandler) Store(c *gin.Context) {
 	article := req.ToDomain()
 	article.User.ID = userID.(int64)
 
-	// 4. 调用 Service
 	ctx := c.Request.Context()
 	if err := a.Service.Store(ctx, &article); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})

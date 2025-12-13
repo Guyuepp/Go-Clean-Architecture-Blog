@@ -5,10 +5,16 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/bxcodec/go-clean-arch/domain"
 	"github.com/redis/go-redis/v9"
+)
+
+const (
+	KeyViewsBuffer     = "article:views:buffer"
+	KeyViewsProcessing = "article:views:processing"
 )
 
 type ArticleCache struct {
@@ -16,7 +22,9 @@ type ArticleCache struct {
 }
 
 func NewArticleCache(client *redis.Client) *ArticleCache {
-	return &ArticleCache{client}
+	return &ArticleCache{
+		client,
+	}
 }
 
 func (c *ArticleCache) Get(ctx context.Context, id int64) (res domain.Article, err error) {
@@ -42,8 +50,33 @@ func (c *ArticleCache) Set(ctx context.Context, ar *domain.Article) (err error) 
 }
 
 func (c *ArticleCache) Incr(ctx context.Context, id int64) (int64, error) {
-	key := fmt.Sprintf("article:views:%d", id)
-	return c.client.Incr(ctx, key).Result()
+	return c.client.HIncrBy(ctx, KeyViewsBuffer, strconv.FormatInt(id, 10), 1).Result()
+}
+
+func (c *ArticleCache) FetchAndResetViews(ctx context.Context) (map[int64]int64, error) {
+	result := make(map[int64]int64)
+	err := c.client.Rename(ctx, KeyViewsBuffer, KeyViewsProcessing).Err()
+	if err != nil {
+		return result, err
+	}
+
+	data, err := c.client.HGetAll(ctx, KeyViewsProcessing).Result()
+	if err != nil {
+		if errors.Is(err, redis.Nil) {
+			return result, nil
+		}
+		return result, err
+	}
+
+	for idStr, viewsStr := range data {
+		id, _ := strconv.ParseInt(idStr, 10, 64)
+		views, _ := strconv.ParseInt(viewsStr, 10, 64)
+		result[id] = views
+	}
+
+	c.client.Del(ctx, KeyViewsProcessing)
+
+	return result, nil
 }
 
 func (c *ArticleCache) Del(ctx context.Context, id int64) (err error) {

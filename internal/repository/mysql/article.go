@@ -20,6 +20,8 @@ func NewArticleRepository(db *gorm.DB) *ArticleRepository {
 	return &ArticleRepository{db}
 }
 
+// TODO 从数据库中拿文章时应该使用连表查询把user信息也查出来
+
 func (m *ArticleRepository) Fetch(ctx context.Context, cursor string, num int64) (res []domain.Article, nextCursor string, err error) {
 	var articles []model.Article
 	decodedCursor, err := repository.DecodeCursor(cursor)
@@ -107,10 +109,10 @@ func (m *ArticleRepository) Update(ctx context.Context, ar *domain.Article) (err
 	return
 }
 
-func (m *ArticleRepository) UpdateViews(ctx context.Context, id int64, newViews int64) (err error) {
-	result := m.DB.WithContext(ctx).Model(&model.Article{}).Where("id = ?", id).Update("views", newViews)
+func (m *ArticleRepository) AddViews(ctx context.Context, id int64, deltaViews int64) (err error) {
+	result := m.DB.WithContext(ctx).Model(&model.Article{}).Where("id = ?", id).Update("views", gorm.Expr("views + ?", deltaViews))
 	if result.Error != nil {
-		return fmt.Errorf("failed to update views: %w", result.Error)
+		return fmt.Errorf("failed to add views: %w", result.Error)
 	}
 
 	if result.RowsAffected == 0 {

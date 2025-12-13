@@ -98,7 +98,6 @@ func (a *Service) Fetch(ctx context.Context, cursor string, num int64) (res []do
 
 func (a *Service) GetByID(ctx context.Context, id int64) (res domain.Article, err error) {
 	res, err = a.articleCache.Get(ctx, id)
-	shouldSetCache := false
 
 	if err != nil {
 		if !errors.Is(err, redis.Nil) {
@@ -115,29 +114,21 @@ func (a *Service) GetByID(ctx context.Context, id int64) (res domain.Article, er
 			return domain.Article{}, err
 		}
 		res.User = resUser
-		shouldSetCache = true
+
+		go func(art domain.Article) {
+			if err := a.articleCache.Set(ctx, &art); err != nil {
+				logrus.Warnf("failed to set cache: %v", err)
+			}
+		}(res)
 	}
 
-	newViews, errInrc := a.articleCache.Incr(context.Background(), id)
-	if errInrc != nil {
-		logrus.Warnf("redis incr error: %v", errInrc)
+	deltaViews, err := a.articleCache.Incr(ctx, id)
+	if err != nil {
+		return res, err
 	} else {
-		res.Views = newViews
+		res.Views += deltaViews
+		return res, err
 	}
-
-	go func() {
-		bgCtx := context.Background()
-
-		if errInrc == nil && newViews%10 == 0 {
-			_ = a.articleRepo.UpdateViews(bgCtx, id, newViews)
-		}
-
-		if shouldSetCache {
-			_ = a.articleCache.Set(bgCtx, &res)
-		}
-	}()
-
-	return res, nil
 }
 
 func (a *Service) Update(ctx context.Context, ar *domain.Article) (err error) {
@@ -198,6 +189,6 @@ func (a *Service) Delete(ctx context.Context, id int64) (err error) {
 	return
 }
 
-func (a *Service) UpdateViews(ctx context.Context, id int64, newViews int64) error {
-	return a.articleRepo.UpdateViews(ctx, id, newViews)
+func (a *Service) AddViews(ctx context.Context, id int64, deltaViews int64) error {
+	return a.articleRepo.AddViews(ctx, id, deltaViews)
 }
