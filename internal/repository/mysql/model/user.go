@@ -19,8 +19,8 @@ func (User) TableName() string {
 	return "user"
 }
 
-func (m *User) ToDomain() domain.Author {
-	return domain.Author{
+func (m *User) ToDomain() domain.User {
+	return domain.User{
 		ID:        m.ID,
 		Name:      m.Name,
 		Username:  m.Username,
@@ -30,7 +30,7 @@ func (m *User) ToDomain() domain.Author {
 	}
 }
 
-func NewUserFromDomain(a *domain.Author) User {
+func NewUserFromDomain(a *domain.User) User {
 	return User{
 		ID:        a.ID,
 		Name:      a.Name,

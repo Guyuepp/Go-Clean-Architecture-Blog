@@ -45,3 +45,14 @@ func (c *ArticleCache) Incr(ctx context.Context, id int64) (int64, error) {
 	key := fmt.Sprintf("article:views:%d", id)
 	return c.client.Incr(ctx, key).Result()
 }
+
+func (c *ArticleCache) Del(ctx context.Context, id int64) (err error) {
+	key := fmt.Sprintf("article:%d", id)
+	err = c.client.Del(ctx, key).Err()
+	if err != nil {
+		return
+	}
+	key = fmt.Sprintf("article:views:%d", id)
+	err = c.client.Del(ctx, key).Err()
+	return
+}

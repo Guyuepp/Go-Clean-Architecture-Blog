@@ -19,17 +19,16 @@ func NewUserRepository(db *gorm.DB) *UserRepository {
 	}
 }
 
-func (m *UserRepository) GetByID(ctx context.Context, id int64) (domain.Author, error) {
+func (m *UserRepository) GetByID(ctx context.Context, id int64) (domain.User, error) {
 	var user model.User
 	if err := m.DB.WithContext(ctx).First(&user, "id = ?", id).Error; err != nil {
-		return domain.Author{}, err
+		return domain.User{}, err
 	}
 
-	author := user.ToDomain()
-	return author, nil
+	return user.ToDomain(), nil
 }
 
-func (m *UserRepository) Insert(ctx context.Context, a *domain.Author) error {
+func (m *UserRepository) Insert(ctx context.Context, a *domain.User) error {
 	userModel := model.NewUserFromDomain(a)
 
 	result := m.DB.WithContext(ctx).Create(&userModel)
@@ -42,19 +41,18 @@ func (m *UserRepository) Insert(ctx context.Context, a *domain.Author) error {
 	return nil
 }
 
-func (m *UserRepository) Update(ctx context.Context, a *domain.Author) error {
+func (m *UserRepository) Update(ctx context.Context, a *domain.User) error {
 	userModel := model.NewUserFromDomain(a)
 
 	err := m.DB.WithContext(ctx).Model(&userModel).Updates(&userModel).Error
 	return err
 }
 
-func (m *UserRepository) GetByUsername(ctx context.Context, username string) (domain.Author, error) {
+func (m *UserRepository) GetByUsername(ctx context.Context, username string) (domain.User, error) {
 	var user model.User
 	if err := m.DB.WithContext(ctx).First(&user, "username = ?", username).Error; err != nil {
-		return domain.Author{}, err
+		return domain.User{}, err
 	}
 
-	author := user.ToDomain()
-	return author, nil
+	return user.ToDomain(), nil
 }

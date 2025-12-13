@@ -74,6 +74,8 @@ func (m *ArticleRepository) Store(ctx context.Context, a *domain.Article) (err e
 		return result.Error
 	}
 	a.ID = articleModel.ID
+	a.CreatedAt = articleModel.CreatedAt
+	a.UpdatedAt = articleModel.UpdatedAt
 	return
 }
 

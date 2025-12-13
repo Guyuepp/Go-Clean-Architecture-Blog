@@ -27,7 +27,7 @@ func (m *Article) ToDomain() domain.Article {
 		Content:   m.Content,
 		UpdatedAt: m.UpdatedAt,
 		CreatedAt: m.CreatedAt,
-		Author: domain.Author{
+		User: domain.User{
 			ID: m.UserID,
 		},
 		Views: m.Views,
@@ -39,7 +39,7 @@ func NewArticleFromDomain(a *domain.Article) *Article {
 		ID:        a.ID,
 		Title:     a.Title,
 		Content:   a.Content,
-		UserID:    a.Author.ID,
+		UserID:    a.User.ID,
 		UpdatedAt: a.UpdatedAt,
 		CreatedAt: a.CreatedAt,
 		Views:     a.Views,

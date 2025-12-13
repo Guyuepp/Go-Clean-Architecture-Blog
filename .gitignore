@@ -10,3 +10,5 @@ bin/
 tmp_app/
 .env
 CONFIG
+test_rest/
+*.bak

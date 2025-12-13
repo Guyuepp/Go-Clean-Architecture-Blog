@@ -2,14 +2,14 @@ package request
 
 import "github.com/bxcodec/go-clean-arch/domain"
 
-type Author struct {
-	Name     string `json:"name" binding:"required"`
+type User struct {
+	Name     string `json:"name"`
 	Username string `json:"username" binding:"required"`
 	Password string `json:"password" binding:"required"`
 }
 
-func (a *Author) ToDomain() domain.Author {
-	return domain.Author{
+func (a *User) ToDomain() domain.User {
+	return domain.User{
 		Name:     a.Name,
 		Username: a.Username,
 		Password: a.Password,

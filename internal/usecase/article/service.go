@@ -12,43 +12,17 @@ import (
 	"github.com/bxcodec/go-clean-arch/domain"
 )
 
-// ArticleRepository represent the article's repository contract
-//
-//go:generate mockery --name ArticleRepository
-type ArticleRepository interface {
-	Fetch(ctx context.Context, cursor string, num int64) (res []domain.Article, nextCursor string, err error)
-	GetByID(ctx context.Context, id int64) (domain.Article, error)
-	GetByTitle(ctx context.Context, title string) (domain.Article, error)
-	UpdateViews(ctx context.Context, id int64, newViews int64) error
-	Update(ctx context.Context, ar *domain.Article) error
-	Store(ctx context.Context, a *domain.Article) error
-	Delete(ctx context.Context, id int64) error
-}
-
-// UserRepository represent the user's repository contract
-//
-//go:generate mockery --name UserRepository
-type UserRepository interface {
-	GetByID(ctx context.Context, id int64) (domain.Author, error)
-}
-
-type ArticleCache interface {
-	Get(ctx context.Context, id int64) (res domain.Article, err error)
-	Set(ctx context.Context, ar *domain.Article) (err error)
-	Incr(ctx context.Context, id int64) (views int64, err error)
-}
-
 type Service struct {
-	articleRepo  ArticleRepository
-	authorRepo   UserRepository
-	articleCache ArticleCache
+	articleRepo  domain.ArticleRepository
+	userRepo     domain.UserRepository
+	articleCache domain.ArticleCache
 }
 
 // NewService will create a new article service object
-func NewService(a ArticleRepository, u UserRepository, ac ArticleCache) *Service {
+func NewService(a domain.ArticleRepository, u domain.UserRepository, ac domain.ArticleCache) *Service {
 	return &Service{
 		articleRepo:  a,
-		authorRepo:   u,
+		userRepo:     u,
 		articleCache: ac,
 	}
 }
@@ -58,30 +32,30 @@ func NewService(a ArticleRepository, u UserRepository, ac ArticleCache) *Service
 * Look how this works in this package explanation
 * in godoc: https://godoc.org/golang.org/x/sync/errgroup#ex-Group--Pipeline
  */
-func (a *Service) fillAuthorDetails(ctx context.Context, data []domain.Article) ([]domain.Article, error) {
+func (a *Service) fillUserDetails(ctx context.Context, data []domain.Article) ([]domain.Article, error) {
 	g, ctx := errgroup.WithContext(ctx)
-	// Get the author's id
-	mapAuthors := map[int64]domain.Author{}
+	// Get the User's id
+	mapUsers := map[int64]domain.User{}
 
 	for _, article := range data { //nolint
-		mapAuthors[article.Author.ID] = domain.Author{}
+		mapUsers[article.User.ID] = domain.User{}
 	}
-	// Using goroutine to fetch the author's detail
-	chanAuthor := make(chan domain.Author)
-	for authorID := range mapAuthors {
-		authorID := authorID
+	// Using goroutine to fetch the User's detail
+	chanUser := make(chan domain.User)
+	for UserID := range mapUsers {
+		UserID := UserID
 		g.Go(func() error {
-			res, err := a.authorRepo.GetByID(ctx, authorID)
+			res, err := a.userRepo.GetByID(ctx, UserID)
 			if err != nil {
 				return err
 			}
-			chanAuthor <- res
+			chanUser <- res
 			return nil
 		})
 	}
 
 	go func() {
-		defer close(chanAuthor)
+		defer close(chanUser)
 		err := g.Wait()
 		if err != nil {
 			logrus.Error(err)
@@ -90,9 +64,9 @@ func (a *Service) fillAuthorDetails(ctx context.Context, data []domain.Article) 
 
 	}()
 
-	for author := range chanAuthor {
-		if author != (domain.Author{}) {
-			mapAuthors[author.ID] = author
+	for User := range chanUser {
+		if User != (domain.User{}) {
+			mapUsers[User.ID] = User
 		}
 	}
 
@@ -100,10 +74,10 @@ func (a *Service) fillAuthorDetails(ctx context.Context, data []domain.Article) 
 		return nil, err
 	}
 
-	// merge the author's data
+	// merge the User's data
 	for index, item := range data { //nolint
-		if a, ok := mapAuthors[item.Author.ID]; ok {
-			data[index].Author = a
+		if a, ok := mapUsers[item.User.ID]; ok {
+			data[index].User = a
 		}
 	}
 	return data, nil
@@ -115,7 +89,7 @@ func (a *Service) Fetch(ctx context.Context, cursor string, num int64) (res []do
 		return nil, "", err
 	}
 
-	res, err = a.fillAuthorDetails(ctx, res)
+	res, err = a.fillUserDetails(ctx, res)
 	if err != nil {
 		nextCursor = ""
 	}
@@ -136,11 +110,11 @@ func (a *Service) GetByID(ctx context.Context, id int64) (res domain.Article, er
 			return domain.Article{}, err
 		}
 
-		resAuthor, err := a.authorRepo.GetByID(ctx, res.Author.ID)
+		resUser, err := a.userRepo.GetByID(ctx, res.User.ID)
 		if err != nil {
 			return domain.Article{}, err
 		}
-		res.Author = resAuthor
+		res.User = resUser
 		shouldSetCache = true
 	}
 
@@ -177,12 +151,12 @@ func (a *Service) GetByTitle(ctx context.Context, title string) (res domain.Arti
 		return
 	}
 
-	resAuthor, err := a.authorRepo.GetByID(ctx, res.Author.ID)
+	resUser, err := a.userRepo.GetByID(ctx, res.User.ID)
 	if err != nil {
 		return domain.Article{}, err
 	}
 
-	res.Author = resAuthor
+	res.User = resUser
 	return
 }
 
@@ -193,6 +167,15 @@ func (a *Service) Store(ctx context.Context, m *domain.Article) (err error) {
 	}
 
 	err = a.articleRepo.Store(ctx, m)
+	if err != nil {
+		return
+	}
+	userDetail, err := a.userRepo.GetByID(ctx, m.User.ID)
+	if err != nil {
+		return
+	}
+	m.User.Name = userDetail.Name
+	m.User.Username = userDetail.Username
 	return
 }
 
@@ -204,7 +187,15 @@ func (a *Service) Delete(ctx context.Context, id int64) (err error) {
 	if existedArticle == (domain.Article{}) {
 		return domain.ErrNotFound
 	}
-	return a.articleRepo.Delete(ctx, id)
+	err = a.articleRepo.Delete(ctx, id)
+	if err != nil {
+		return
+	}
+	err = a.articleCache.Del(ctx, id)
+	if err != nil {
+		return
+	}
+	return
 }
 
 func (a *Service) UpdateViews(ctx context.Context, id int64, newViews int64) error {

@@ -18,9 +18,10 @@ import (
 	mysqlRepo "github.com/bxcodec/go-clean-arch/internal/repository/mysql"
 	myRedisCache "github.com/bxcodec/go-clean-arch/internal/repository/redis"
 
-	"github.com/bxcodec/go-clean-arch/article"
 	"github.com/bxcodec/go-clean-arch/internal/rest"
 	"github.com/bxcodec/go-clean-arch/internal/rest/middleware"
+	"github.com/bxcodec/go-clean-arch/internal/usecase/article"
+	"github.com/bxcodec/go-clean-arch/internal/usecase/user"
 	"github.com/joho/godotenv"
 )
 
@@ -138,8 +139,33 @@ func main() {
 	articleCache := myRedisCache.NewArticleCache(client)
 
 	// Build service Layer
-	svc := article.NewService(articleRepo, userRepo, articleCache)
-	rest.NewArticleHandler(route, svc)
+	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
+	jwtTTLStr := os.Getenv("JWT_EXPIRE_HOURS")
+	jwtTTL, err := strconv.Atoi(jwtTTLStr)
+	if err != nil {
+		log.Println("failed to parse JWT TTL, using default 24 hours")
+		jwtTTL = 24
+	}
+	articleSvc := article.NewService(articleRepo, userRepo, articleCache)
+	userSvc := user.NewService(userRepo, jwtSecret, time.Duration(jwtTTL)*time.Hour)
+	articleHandler := rest.NewArticleHandler(articleSvc)
+	userHandler := rest.NewUserHandler(userSvc)
+
+	authMiddleware := middleware.AuthMiddleware(string(jwtSecret))
+
+	// Register routes
+	route.POST("/register", userHandler.Register)
+	route.POST("/login", userHandler.Login)
+
+	route.GET("/articles", articleHandler.FetchArticle)
+	route.GET("/articles/:id", articleHandler.GetByID)
+
+	authorized := route.Group("/")
+	authorized.Use(authMiddleware)
+	{
+		authorized.POST("/articles", articleHandler.Store)
+		authorized.DELETE("/articles/:id", articleHandler.Delete)
+	}
 
 	// Start Server
 	address := os.Getenv("SERVER_ADDRESS")

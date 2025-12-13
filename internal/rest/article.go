@@ -6,8 +6,9 @@ import (
 	"strconv"
 
 	"github.com/bxcodec/go-clean-arch/domain"
+	"github.com/bxcodec/go-clean-arch/internal/rest/request"
+	"github.com/bxcodec/go-clean-arch/internal/rest/response"
 	"github.com/gin-gonic/gin"
-	"github.com/go-playground/validator/v10"
 	"github.com/sirupsen/logrus"
 )
 
@@ -34,13 +35,10 @@ type ArticleHandler struct {
 
 const defaultNum = 10
 
-func NewArticleHandler(r *gin.Engine, svc ArticleService) {
-	handler := &ArticleHandler{svc}
-
-	r.GET("/articles", handler.FetchArticle)
-	r.POST("/articles", handler.Store)
-	r.GET("/articles/:id", handler.GetByID)
-	r.DELETE("/articles/:id", handler.Delete)
+func NewArticleHandler(svc ArticleService) *ArticleHandler {
+	return &ArticleHandler{
+		Service: svc,
+	}
 }
 
 // GetByID will get article by given id
@@ -59,7 +57,7 @@ func (a *ArticleHandler) GetByID(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, art)
+	c.JSON(http.StatusOK, response.NewArticleFromDomain(&art))
 }
 
 // FetchArticle will fetch the articles based on given params
@@ -79,39 +77,38 @@ func (a *ArticleHandler) FetchArticle(c *gin.Context) {
 		c.JSON(getStatusCode(err), ResponseError{Message: err.Error()})
 		return
 	}
-	c.Header(`X-cursor`, nextCursor)
-	c.JSON(http.StatusOK, listAr)
-}
-
-// isRequestValid will judge if the article is valid via validator
-func isRequestValid(m *domain.Article) (bool, error) {
-	validate := validator.New()
-	if err := validate.Struct(m); err != nil {
-		return false, err
+	res := make([]response.Article, len(listAr))
+	for i := range listAr {
+		res[i] = response.NewArticleFromDomain(&listAr[i])
 	}
-	return true, nil
+	c.Header(`X-cursor`, nextCursor)
+	c.JSON(http.StatusOK, res)
 }
 
 // Store will store the article by given request body
 func (a *ArticleHandler) Store(c *gin.Context) {
-	article := domain.Article{}
-	err := c.ShouldBindJSON(&article)
-	if err != nil {
-		c.JSON(http.StatusUnprocessableEntity, ResponseError{Message: err.Error()})
+	var req request.Article
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	if ok, err := isRequestValid(&article); !ok {
-		c.JSON(http.StatusBadRequest, err.Error())
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	article := req.ToDomain()
+	article.User.ID = userID.(int64)
+
+	// 4. 调用 Service
+	ctx := c.Request.Context()
+	if err := a.Service.Store(ctx, &article); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	if err = a.Service.Store(c.Request.Context(), &article); err != nil {
-		c.JSON(getStatusCode(err), ResponseError{Message: err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusCreated, article)
+	c.JSON(http.StatusCreated, response.NewArticleFromDomain(&article))
 }
 
 // Delete will delete the article by given param
