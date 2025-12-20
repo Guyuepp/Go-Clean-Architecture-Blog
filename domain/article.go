@@ -17,6 +17,11 @@ type Article struct {
 	Likes     int64     // Number of likes
 }
 
+type RankItem struct {
+	ArticleID int64
+	Likes     int64
+}
+
 // ArticleRepository defines the contract for article data persistence
 type ArticleRepository interface {
 	// Fetch retrieves a paginated list of articles.
@@ -75,14 +80,19 @@ type ArticleCache interface {
 
 	// Likes related
 	GetLikeCount(ctx context.Context, articleID int64) (int64, error)
+	MGetLikeCounts(ctx context.Context, articleIDs []int64) (map[int64]int64, error)
+	IncrLikeCount(ctx context.Context, articleID int64) (int64, error)
+
 	AddLikeRecord(ctx context.Context, likeRecord UserLike) (bool, error)
 	DecrLikeRecord(ctx context.Context, likeRecord UserLike) (bool, error)
-	RebuildAndLike(ctx context.Context, aid int64, uid int64, dbLikers []int64) (bool, error)
-	RebuildAndUnlike(ctx context.Context, aid int64, uid int64, dbLikers []int64) (bool, error)
-	IsLiked(ctx context.Context, articleID, userID int64) (bool, error)
-	GetHotRank(ctx context.Context, limit int) ([]Article, error)
-	FetchLikesCount(ctx context.Context) (map[int64]int64, error)
-	AddUserLikedArticles(ctx context.Context, articleIDs []int64) error
+	IsLiked(ctx context.Context, likeRecord UserLike) (bool, error)
+	IsLikedBatch(ctx context.Context, userID int64, articleIDs []int64) (map[int64]bool, error)
+	SetUserLikedArticles(ctx context.Context, UserID int64, articleIDs []int64) error
+
+	GetDailyRank(ctx context.Context, limit int64) ([]Article, error)
+	IncrDailyRankScore(ctx context.Context, aid int64, scoreDelta float64) error
+	GetHistoryRank(ctx context.Context, limit int64) ([]Article, error)
+	SetHistoryRank(ctx context.Context, articleIDs []int64, scores []float64) error
 }
 
 type ArticleUsecase interface {
@@ -91,7 +101,8 @@ type ArticleUsecase interface {
 	Store(ctx context.Context, ar *Article) error
 	Update(ctx context.Context, ar *Article) error
 	Delete(ctx context.Context, id int64) error
-	FetchByLikes(ctx context.Context, limit int) ([]Article, error)
 	AddLikeRecord(ctx context.Context, likeRecord UserLike) (bool, error)
 	RemoveLikeRecord(ctx context.Context, likeRecord UserLike) (bool, error)
+	FetchDailyRank(ctx context.Context, limit int64) ([]Article, error)
+	FetchHistoryRank(ctx context.Context, limit int64) ([]Article, error)
 }
