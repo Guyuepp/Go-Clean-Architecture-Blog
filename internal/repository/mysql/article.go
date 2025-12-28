@@ -254,3 +254,13 @@ func (m *articleRepository) FetchUserLikedArticles(ctx context.Context, uid int6
 
 	return res, err
 }
+
+func (m *articleRepository) FetchArticlesByLikes(ctx context.Context, limit int64) ([]domain.Article, error) {
+	var res []model.Article
+	err := m.DB.WithContext(ctx).Model(&model.Article{}).Order("likes desc").Limit(int(limit)).Find(&res).Error
+	ars := make([]domain.Article, len(res))
+	for i := range res {
+		ars[i] = res[i].ToDomain()
+	}
+	return ars, err
+}

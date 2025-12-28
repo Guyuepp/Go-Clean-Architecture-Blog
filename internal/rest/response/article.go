@@ -12,6 +12,7 @@ type Article struct {
 	UpdatedAt string `json:"updated_at"`
 	CreatedAt string `json:"created_at"`
 	Views     int64  `json:"views"`
+	Likes     int64  `json:"likes"`
 }
 
 // FromDomain: Domain -> Response
@@ -24,5 +25,6 @@ func NewArticleFromDomain(a *domain.Article) Article {
 		UpdatedAt: a.UpdatedAt.Format("2006-01-02 15:04:05"),
 		CreatedAt: a.CreatedAt.Format("2006-01-02 15:04:05"),
 		Views:     a.Views,
+		Likes:     a.Likes,
 	}
 }

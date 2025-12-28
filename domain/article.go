@@ -17,11 +17,6 @@ type Article struct {
 	Likes     int64     // Number of likes
 }
 
-type RankItem struct {
-	ArticleID int64
-	Likes     int64
-}
-
 // ArticleRepository defines the contract for article data persistence
 type ArticleRepository interface {
 	// Fetch retrieves a paginated list of articles.
@@ -62,6 +57,8 @@ type ArticleRepository interface {
 	FetchUserLikedArticles(ctx context.Context, uid int64, limit int64) ([]int64, error)
 
 	ApplyLikeChanges(ctx context.Context, changes LikeStateChanges) error
+
+	FetchArticlesByLikes(ctx context.Context, limit int64) ([]Article, error)
 }
 
 type ArticleCache interface {
@@ -81,7 +78,8 @@ type ArticleCache interface {
 	// Likes related
 	GetLikeCount(ctx context.Context, articleID int64) (int64, error)
 	MGetLikeCounts(ctx context.Context, articleIDs []int64) (map[int64]int64, error)
-	IncrLikeCount(ctx context.Context, articleID int64) (int64, error)
+	SetLikeCount(ctx context.Context, articleID int64, likes int64) error
+	MSetLikeCount(ctx context.Context, articleIDs []int64, likes []int64) error
 
 	AddLikeRecord(ctx context.Context, likeRecord UserLike) (bool, error)
 	DecrLikeRecord(ctx context.Context, likeRecord UserLike) (bool, error)

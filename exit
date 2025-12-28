@@ -1,0 +1,81 @@
+[33mb7fc057[m[33m ([m[1;36mHEAD -> [m[1;32mmaster[m[33m, [m[1;31morigin/master[m[33m)[m chore: ensure the accuracy of views via asynchronous write-back
+[33me6d23b3[m feat: use jwt to handle register and logging in
+[33ma528a89[m chore: add different models: dto, vo and model
+[33m7430afe[m chore: replaced sql with gormv2 and replaced author with user
+[33ma2cdf2b[m build: use gin frame
+[33m6d8f1a8[m fix: retry to connect database when make up
+[33mafbd9bf[m fix: view count is accurate now
+[33m4ec7f51[m perf: Add Redis caching for article data
+[33m4eb290a[m doc: typo
+[33m4d4c79c[m docs: add description
+[33m5f8de32[m feat: add views count feature
+[33me06c6d0[m[33m ([m[1;32mperf-test-old[m[33m)[m chore(deps): bump github.com/stretchr/testify from 1.8.4 to 1.9.0 (#94)
+[33m7347d9a[m chore: add dependabot (#93)
+[33m7699187[m fix: Update Variable Name for Server Address in main.go (#92)
+[33mbeb599f[m feat: introduce v4 (#88)
+[33md5d2bac[m chore: fix typo
+[33m4f7f659[m chore: fix typo readme
+[33m7b8cd9b[m chore: linting and cleanup (#70)
+[33m4cbd13b[m chore: add sponsor button
+[33m2d4f0da[m chore:  fix error style https://github.com/golang/go/wiki/CodeReviewComments#error-strings (#49)
+[33m9e174b8[m docs: remove unused information in Readme
+[33m36ca1e8[m chore: update readme styling
+[33m9b4afdf[m chore: change URL on the article for V2
+[33md452858[m feat: Introduce domain package (#21)
+[33m0e2d18a[m chore: add linter (#44)
+[33mc8b6b9b[m chore: Unreachable  code removed (#42)
+[33m7408b30[m fix(clean-arch.png): update the diagram
+[33m77294ce[m chore(Dockerfile): gcc and dep are not used now (#32)
+[33m40aaa83[m chore(sql): reduce the sql script length to fix the programming language identifier from Github (#34)
+[33m3b00474[m chore(readme.md): update how to run projects and test (#29)
+[33m60a2d43[m chore(go.mod) migrate to go module (#28)
+[33ma757f55[m chore(License): Add MIT License
+[33mc562643[m chore: makes command make run reliable (#24)
+[33mf874559[m[33m ([m[1;33mtag: v2.0.1[m[33m)[m chore(makefile): update make-file build (#23)
+[33mffdaa8a[m chore: apply linter and clean dirty codes (#22)
+[33mb1e3031[m Update README.md
+[33ma275d19[m chore: add dockerfile and docker-compose (#20)
+[33m808ff08[m chore: update diagram
+[33mac63a89[m chore: add diagram
+[33m3a5badc[m add diagram
+[33mec0848d[m chore: Fix typo and a few maintenance stuff  (#15)
+[33mf7eab0b[m Fix: typo (#14)
+[33mfc34d41[m[33m ([m[1;33mtag: v2.0.0[m[33m)[m fix: filename correctness (#12)
+[33m657bf5e[m Update README.md
+[33m020a1b6[m Update README.md
+[33m0f43de7[m Update README.md
+[33mca3081a[m Update README.md
+[33me75a240[m feat: add context (#9)
+[33m7e2d3a2[m Update README.md
+[33mb50f0fb[m V2 (#8)
+[33m0d0db70[m[33m ([m[1;33mtag: v1.0.0[m[33m)[m update dependencies and refactor (#6)
+[33m1000685[m :sparkles: Add Author (#4)
+[33me5bf0da[m :bug: Fix missing import (#3)
+[33m7ea48da[m :sparkles: Refactor Repository to one package (#2)
+[33mbfea8c0[m update some error
+[33m96cc39f[m refixing imporst
+[33m2eb1bd3[m breaking changes into domain driven
+[33m86eba66[m add update
+[33mea8d2e8[m add middleware
+[33mdf1e86e[m add middleware
+[33m59d90ff[m update readme
+[33ma8d771a[m change to golang dep
+[33m96b961b[m update glide
+[33m0fba9b7[m add mysql query for database
+[33mbeb09b9[m change import
+[33m92abce5[m merged
+[33m8967804[m add another resources
+[33me7c503b[m Update errors.go
+[33md6ae4d8[m repairing dependencies
+[33m8222e49[m remove unnecessary field
+[33mc1d56c6[m change something
+[33m2777aaa[m update readme
+[33mdc3fd46[m remove unnecessary field
+[33m4f9b385[m add middleware
+[33m8873dfc[m add Delete
+[33m4403e28[m add Store method
+[33m7294a3f[m add make file
+[33m1817688[m finish get by id
+[33m9a34fd5[m add repository test
+[33m3af21e1[m initial commit
+[33md257fa7[m Initial commit

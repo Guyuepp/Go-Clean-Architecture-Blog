@@ -1,7 +1,6 @@
 package rest
 
 import (
-	"context"
 	"net/http"
 	"strconv"
 
@@ -17,25 +16,22 @@ type ResponseError struct {
 	Message string `json:"message"`
 }
 
-//go:generate mockery --name ArticleService
-type ArticleService interface {
-	Fetch(ctx context.Context, cursor string, num int64) ([]domain.Article, string, error)
-	GetByID(ctx context.Context, id int64) (domain.Article, error)
-	Update(ctx context.Context, ar *domain.Article) error
-	AddViews(ctx context.Context, id int64, newViews int64) error
-	GetByTitle(ctx context.Context, title string) (domain.Article, error)
-	Store(context.Context, *domain.Article) error
-	Delete(ctx context.Context, id int64) error
-}
-
 // ArticleHandler  represent the httphandler for article
 type ArticleHandler struct {
-	Service ArticleService
+	Service domain.ArticleUsecase
 }
 
-const defaultNum = 10
+const (
+	DefaultPageNum = 10
+	PageMinNum     = 5
+	PageMaxNum     = 30
 
-func NewArticleHandler(svc ArticleService) *ArticleHandler {
+	DefaultRankLimit = 10
+	RankMin          = 5
+	RankMax          = 30
+)
+
+func NewArticleHandler(svc domain.ArticleUsecase) *ArticleHandler {
 	return &ArticleHandler{
 		Service: svc,
 	}
@@ -64,8 +60,8 @@ func (a *ArticleHandler) GetByID(c *gin.Context) {
 func (a *ArticleHandler) FetchArticle(c *gin.Context) {
 	numS := c.Query("num")
 	num, err := strconv.Atoi(numS)
-	if err != nil || num == 0 {
-		num = defaultNum
+	if err != nil || num < PageMinNum || num > PageMaxNum {
+		num = DefaultPageNum
 		logrus.Error("Invalid param 'num'")
 	}
 
@@ -127,7 +123,91 @@ func (a *ArticleHandler) Delete(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
-// getStatusCode will get the code of the error from ArticleService
+// Like adds a like record if not exists
+func (a *ArticleHandler) Like(c *gin.Context) {
+	idP, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, domain.ErrNotFound.Error())
+		return
+	}
+	aid := int64(idP)
+	UserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	uid := UserID.(int64)
+	ok, err := a.Service.AddLikeRecord(c.Request.Context(), domain.UserLike{
+		ArticleID: aid,
+		UserID:    uid,
+	})
+	if err != nil {
+		c.JSON(getStatusCode(err), ResponseError{err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"is_changed": ok})
+}
+
+// Unlike removes a like record if exists
+func (a *ArticleHandler) Unlike(c *gin.Context) {
+	idP, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		c.JSON(http.StatusNotFound, domain.ErrNotFound.Error())
+		return
+	}
+	aid := int64(idP)
+	UserID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
+	uid := UserID.(int64)
+	ok, err := a.Service.RemoveLikeRecord(c.Request.Context(), domain.UserLike{
+		ArticleID: aid,
+		UserID:    uid,
+	})
+	if err != nil {
+		c.JSON(getStatusCode(err), ResponseError{err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"is_changed": ok})
+}
+
+func (a *ArticleHandler) FetchRank(c *gin.Context) {
+	limitS := c.Query("limit")
+	limit, err := strconv.ParseInt(limitS, 10, 64)
+	if err != nil || limit < RankMin || limit > RankMax {
+		limit = DefaultRankLimit
+		logrus.Error("Invalid param 'limit'")
+	}
+	rankType := c.DefaultQuery("type", "daily")
+
+	var listAr []domain.Article
+
+	switch rankType {
+	case "daily":
+		listAr, err = a.Service.FetchDailyRank(c.Request.Context(), limit)
+	case "history":
+		listAr, err = a.Service.FetchHistoryRank(c.Request.Context(), limit)
+	default:
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid rank type"})
+		return
+	}
+	if err != nil {
+		c.JSON(getStatusCode(err), ResponseError{err.Error()})
+		return
+	}
+
+	res := make([]response.Article, len(listAr))
+	for i := range listAr {
+		res[i] = response.NewArticleFromDomain(&listAr[i])
+	}
+	c.JSON(http.StatusOK, res)
+}
+
+// getStatusCode will get the code of the error from domain.ArticleUsecase
 func getStatusCode(err error) int {
 	if err == nil {
 		return http.StatusOK

@@ -59,7 +59,7 @@ INSERT INTO `article` VALUES (
     '2017-05-18 13:50:19',
     '2017-05-18 13:50:19', 
     0,
-    0
+    1
   ),(
     3,
     'Makan Sayur',

@@ -127,10 +127,12 @@ func (a *Service) GetByID(ctx context.Context, id int64) (res domain.Article, er
 	}
 
 	newLikes, err := a.articleCache.GetLikeCount(ctx, id)
-	if err != nil {
+	if errors.Is(err, domain.ErrCacheMiss) {
+		_ = a.articleCache.SetLikeCount(ctx, res.ID, res.Likes)
+	} else if err != nil {
 		logrus.Errorf("failed to GetLikeCount from redis: %v", err)
 	} else {
-		res.Likes = max(res.Likes, newLikes)
+		res.Likes = newLikes
 	}
 
 	deltaViews, err := a.articleCache.IncrViews(ctx, id)
@@ -219,7 +221,7 @@ func (a *Service) AddLikeRecord(ctx context.Context, likeRecord domain.UserLike)
 			}
 
 			// 存入redis
-			err = a.articleCache.AddUserLikedArticles(ctx, likedArticles)
+			err = a.articleCache.SetUserLikedArticles(ctx, likeRecord.UserID, likedArticles)
 			if err != nil {
 				logrus.Errorf("failed to AddUserLikedArticles to redis: %v", err)
 				return false, err
@@ -267,7 +269,7 @@ func (a *Service) RemoveLikeRecord(ctx context.Context, likeRecord domain.UserLi
 			}
 
 			// 存入redis
-			err = a.articleCache.AddUserLikedArticles(ctx, likedArticles)
+			err = a.articleCache.SetUserLikedArticles(ctx, likeRecord.UserID, likedArticles)
 			if err != nil {
 				logrus.Errorf("failed to DecrUserLikedArticles to redis: %v", err)
 				return false, err
@@ -301,10 +303,78 @@ func (a *Service) RemoveLikeRecord(ctx context.Context, likeRecord domain.UserLi
 	return ok, nil
 }
 
-func (a *Service) FetchByLikes(ctx context.Context, limit int) ([]domain.Article, error) {
-	res, err := a.articleCache.GetHotRank(ctx, limit)
+func (a *Service) FetchDailyRank(ctx context.Context, limit int64) ([]domain.Article, error) {
+	res, err := a.articleCache.GetDailyRank(ctx, limit)
 	if err != nil {
-		logrus.Errorf("failed to GetGotRank from redis: %v", err)
+		logrus.Errorf("failed to GetDailyRank from redis: %v", err)
+		return nil, err
+	}
+
+	mp := make(map[int64]domain.Article)
+	ids := make([]int64, 0, len(res))
+	for i := range res {
+		mp[res[i].ID] = res[i]
+		ids = append(ids, res[i].ID)
+	}
+
+	cacheRes, err := a.articleCache.GetArticleByIDs(ctx, ids)
+	if err != nil {
+		logrus.Warnf("failed to GetArticleByIDs from redis: %v", err)
+	} else {
+		for i := range cacheRes {
+			mp[cacheRes[i].ID] = cacheRes[i]
+		}
+	}
+
+	idsMissd := make([]int64, 0, len(res))
+	for _, ar := range mp {
+		idsMissd = append(idsMissd, ar.ID)
+	}
+
+	resRepo, err := a.articleRepo.GetByIDs(ctx, idsMissd)
+	if err != nil {
+		logrus.Warnf("failed to GetByIDs from repo: %v", err)
+	} else {
+		a.articleCache.BatchSetArticle(ctx, resRepo)
+		for i := range resRepo {
+			mp[resRepo[i].ID] = resRepo[i]
+		}
+	}
+	for i := range res {
+		ar := mp[res[i].ID]
+		if ar.Title == "" {
+			res[i].Title = "Not Found"
+		} else {
+			ar.Likes = res[i].Likes
+			res[i] = ar
+		}
+	}
+	return res, nil
+}
+
+func (a *Service) FetchHistoryRank(ctx context.Context, limit int64) ([]domain.Article, error) {
+	res, err := a.articleCache.GetHistoryRank(ctx, limit)
+	if errors.Is(err, domain.ErrCacheMiss) {
+		res, err := a.articleRepo.FetchArticlesByLikes(ctx, 100) // NOTE 这里定义了默认取最多100篇
+		if err != nil {
+			logrus.Errorf("failed to FetchArticlesByLikes from repo: %v", err)
+			return nil, err
+		}
+		ids := make([]int64, len(res))
+		scores := make([]float64, len(res))
+		for i := range res {
+			ids[i] = res[i].ID
+			scores[i] = float64(res[i].Likes)
+		}
+
+		err = a.articleCache.SetHistoryRank(ctx, ids, scores)
+		if err != nil {
+			logrus.Warnf("fail to SetHistoryRank to redis: %v", err)
+		}
+
+		return res[:min(int64(len(res)), limit)], nil
+	} else if err != nil {
+		logrus.Errorf("failed to GetHotRank from redis: %v", err)
 		return nil, err
 	}
 
