@@ -92,3 +92,9 @@ go run main.go
 
 为了应对高并发点赞，直接写 MySQL 会造成巨大压力。
 **解决方案**: 采用 `Write-Back` (回写) 策略。先在 Redis 中进行原子计数，通过定时任务/异步协程将增量数据同步至 MySQL，实现了性能与最终一致性的平衡。
+
+
+## 👏 致谢 (Acknowledgements)
+
+本项目的初始架构参考了 [bxcodec/go-clean-arch](https://github.com/bxcodec/go-clean-arch)。  感谢其对 Clean Architecture 的精彩实现与分享。  
+This project structure is adapted from [bxcodec/go-clean-arch](https://github.com/bxcodec/go-clean-arch). Special thanks for the architectural inspiration.
