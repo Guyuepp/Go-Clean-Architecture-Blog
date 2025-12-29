@@ -19,4 +19,6 @@ var (
 	ErrUserNotFound = errors.New("requested user is not found")
 	// ErrBadParamInput will throw if the given request-body or params is not valid
 	ErrInvalidCredentials = errors.New("invalid credentials")
+	// ErrCacheMiss will throw if the requested item is not found in cache and needs to be fetched from the primary datastore
+	ErrCacheMiss = errors.New("cache miss")
 )

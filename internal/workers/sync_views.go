@@ -22,22 +22,20 @@ func NewSyncViewWorker(ar domain.ArticleRepository, ac domain.ArticleCache) *Syn
 }
 
 func (s *SyncViewsWorker) Start(ctx context.Context) {
-	go func() {
-		for {
-			select {
-			case <-ctx.Done():
-				log.Println("SyncViewWorker stoped...")
-				return
-			default:
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("SyncViewWorker stoped...")
+			return
+		default:
 
-			}
-
-			s.safeRun(ctx)
-
-			time.Sleep(1 * time.Second)
-			log.Println("Worker restarting...")
 		}
-	}()
+
+		s.safeRun(ctx)
+
+		time.Sleep(1 * time.Second)
+		log.Println("Worker restarting...")
+	}
 }
 
 func (s *SyncViewsWorker) safeRun(ctx context.Context) {
@@ -64,7 +62,7 @@ func (s *SyncViewsWorker) safeRun(ctx context.Context) {
 func (s *SyncViewsWorker) syncViews(ctx context.Context) {
 	views, err := s.ArticleCache.FetchAndResetViews(ctx)
 	if err != nil {
-		log.Printf("failed to get views from redis: %v", err)
+		log.Printf("SyncViewsWorker failed to get views from redis: %v", err)
 		return
 	}
 

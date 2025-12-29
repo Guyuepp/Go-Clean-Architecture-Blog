@@ -142,6 +142,16 @@ func main() {
 	articleRepo := mysqlRepo.NewArticleRepository(db)
 	articleCache := myRedisCache.NewArticleCache(client)
 
+	// Start worker
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	views_syncer := workers.NewSyncViewWorker(articleRepo, articleCache)
+	go views_syncer.Start(ctx)
+
+	likes_syncer := workers.NewSyncLikesWorker(articleRepo)
+	go likes_syncer.Start(ctx)
+
 	// Build service Layer
 	jwtSecret := []byte(os.Getenv("JWT_SECRET"))
 	jwtTTLStr := os.Getenv("JWT_EXPIRE_HOURS")
@@ -150,19 +160,12 @@ func main() {
 		log.Println("failed to parse JWT TTL, using default 24 hours")
 		jwtTTL = 24
 	}
-	articleSvc := article.NewService(articleRepo, userRepo, articleCache)
+	articleSvc := article.NewService(articleRepo, userRepo, articleCache, likes_syncer)
 	userSvc := user.NewService(userRepo, jwtSecret, time.Duration(jwtTTL)*time.Hour)
 	articleHandler := rest.NewArticleHandler(articleSvc)
 	userHandler := rest.NewUserHandler(userSvc)
 
 	authMiddleware := middleware.AuthMiddleware(string(jwtSecret))
-
-	// Start worker
-	syncer := workers.NewSyncViewWorker(articleRepo, articleCache)
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
-
-	syncer.Start(ctx)
 
 	// Register routes
 	route.POST("/register", userHandler.Register)
@@ -171,11 +174,15 @@ func main() {
 	route.GET("/articles", articleHandler.FetchArticle)
 	route.GET("/articles/:id", articleHandler.GetByID)
 
+	route.GET("/articles/ranks", articleHandler.FetchRank)
+
 	authorized := route.Group("/")
 	authorized.Use(authMiddleware)
 	{
 		authorized.POST("/articles", articleHandler.Store)
 		authorized.DELETE("/articles/:id", articleHandler.Delete)
+		authorized.POST("/articles/:id/like", articleHandler.Like)
+		authorized.DELETE("/articles/:id/like", articleHandler.Unlike)
 	}
 
 	// Start Server

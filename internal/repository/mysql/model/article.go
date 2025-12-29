@@ -10,8 +10,9 @@ type Article struct {
 	ID        int64     `gorm:"primaryKey;autoIncrement"`
 	Title     string    `gorm:"type:varchar(45);not null"`
 	Content   string    `gorm:"type:longtext;not null"`
-	UserID    int64     `gorm:"column:user_id;default:0"`
+	UserID    int64     `gorm:"column:user_id;not null"`
 	Views     int64     `gorm:"default:0"`
+	Likes     int64     `gorm:"default:0"`
 	UpdatedAt time.Time `gorm:"type:datetime"`
 	CreatedAt time.Time `gorm:"type:datetime"`
 }
@@ -31,6 +32,7 @@ func (m *Article) ToDomain() domain.Article {
 			ID: m.UserID,
 		},
 		Views: m.Views,
+		Likes: m.Likes,
 	}
 }
 
@@ -43,5 +45,6 @@ func NewArticleFromDomain(a *domain.Article) *Article {
 		UpdatedAt: a.UpdatedAt,
 		CreatedAt: a.CreatedAt,
 		Views:     a.Views,
+		Likes:     a.Likes,
 	}
 }
