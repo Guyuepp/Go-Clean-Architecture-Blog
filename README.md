@@ -1,104 +1,94 @@
-# Go Clean Architecture (Learning Version)
+# Go Clean Architecture Blog Backend
 
-> Note: This is a modified version based on the original [go-clean-arch](https://github.com/bxcodec/go-clean-arch) project by bxcodec.
+> 基于 Go (Gin) + Clean Architecture 的高性能博客后端系统，集成了 Redis 缓存策略与持久化机制。
 
-## Changelog
+![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)
+![Docker](https://img.shields.io/badge/Docker-Enabled-blue?logo=docker)
+![License](https://img.shields.io/badge/License-MIT-green)
 
-- **v1**: checkout to the [v1 branch](https://github.com/bxcodec/go-clean-arch/tree/v1) <br>
-  Proposed on 2017, archived to v1 branch on 2018 <br>
-  Desc: Initial proposal by me. The story can be read here: https://medium.com/@imantumorang/golang-clean-archithecture-efd6d7c43047
+## 📖 项目简介 (Introduction)
 
-- **v2**: checkout to the [v2 branch](https://github.com/bxcodec/go-clean-arch/tree/v2) <br>
-  Proposed on 2018, archived to v2 branch on 2020 <br>
-  Desc: Improvement from v1. The story can be read here: https://medium.com/@imantumorang/trying-clean-architecture-on-golang-2-44d615bf8fdf
+本项目是一个严格遵循 **Clean Architecture (整洁架构)** 设计原则的博客后端服务。
 
-- **v3**: checkout to the [v3 branch](https://github.com/bxcodec/go-clean-arch/tree/v3) <br>
-  Proposed on 2019, merged to master on 2020. <br>
-  Desc: Introducing Domain package, the details can be seen on this PR [#21](https://github.com/bxcodec/go-clean-arch/pull/21)
+相较于传统的 MVC 架构，本项目旨在解决业务逻辑与框架的高度耦合问题。通过分层设计（Domain, Usecase, Repository, Delivery），实现了高度的可测试性与可维护性。
 
-- **v4**: master branch
-  Proposed on 2024, merged to master on 2024. <br>
-  Desc:
+项目重点实现了**高并发场景下的点赞系统**与**热榜聚合**，采用 Redis + MySQL 的混合存储策略，平衡了一致性与性能。
 
-  - Declare Interfaces to the consuming side,
-  - Introduce `internal` package
-  - Introduce `Service-focused` package.
+## ✨ 核心特性 (Features)
 
-  Details can be seen in this PR [#88](https://github.com/bxcodec/go-clean-arch/pull/88).<br>
+- **🏗 整洁架构**: 严格分离 Domain 层、Usecase 层与 Repository 层，依赖倒置。
+- **🔥 高性能热榜**: 基于 Redis ZSet 实现的实时文章热度排行榜 (Daily Rank)。
+- **👍 高并发点赞**: 
+    - 使用 Redis Set 进行去重与计数，支持高并发写入。
+    - 采用异步策略将缓存数据回写至 MySQL (Persistence)，防止数据丢失。
+- **🔐 用户认证**: 基于 JWT 的用户登录与注册机制。
+- **🐳 容器化部署**: 完整的 Docker & Docker Compose 支持，一键启动。
 
-> ### Author's Note
->
-> You may notice it diverges from the structures seen in previous versions. I encourage you to explore the branches for each version to select the structure that appeals to you the most. In my recent projects, the code structure has progressed to version 4. However, I do not strictly advocate for one version over another. You may encounter alternative examples on the internet that align more closely with your preferences. Rest assured, the foundational concept will remain consistent or at least bear resemblance. The differences are primarily in the arrangement of directories or the integration of advanced tools directly into the setup.
+## 🛠 技术栈 (Tech Stack)
 
-## Description
+- **语言**: Golang (1.21+)
+- **Web 框架**: Gin
+- **ORM**: GORM v2
+- **数据库**: MySQL 8.0
+- **缓存/消息**: Redis 7.0
+- **配置管理**: Viper
+- **日志**: Logrus
 
-This is an example of implementation of Clean Architecture in Go (Golang) projects.
+## 📐 架构设计 (Architecture)
 
-Rule of Clean Architecture by Uncle Bob
+本项目采用标准的 4 层架构设计：
 
-- Independent of Frameworks. The architecture does not depend on the existence of some library of feature laden software. This allows you to use such frameworks as tools, rather than having to cram your system into their limited constraints.
-- Testable. The business rules can be tested without the UI, Database, Web Server, or any other external element.
-- Independent of UI. The UI can change easily, without changing the rest of the system. A Web UI could be replaced with a console UI, for example, without changing the business rules.
-- Independent of Database. You can swap out Oracle or SQL Server, for Mongo, BigTable, CouchDB, or something else. Your business rules are not bound to the database.
-- Independent of any external agency. In fact your business rules simply don’t know anything at all about the outside world.
+1.  **Models (Domain)**: 定义核心业务实体（Article, User），不依赖任何外部库。
+2.  **Repository**: 负责数据存取（MySQL/Redis），实现 Domain 层定义的接口。
+3.  **Usecase**: 核心业务逻辑流程（如：计算热度分值、组装文章详情）。
+4.  **Delivery (HTTP)**: 负责处理 HTTP 请求，参数校验，调用 Usecase。
 
-More at https://8thlight.com/blog/uncle-bob/2012/08/13/the-clean-architecture.html
+![Architecture](./clean-arch.png)
 
-This project has 4 Domain layer :
+## 🚀 快速开始 (Getting Started)
 
-- Models Layer
-- Repository Layer
-- Usecase Layer
-- Delivery Layer
+### 前置要求
+- Go 1.21+
+- Docker & Docker Compose (推荐)
 
-#### The diagram:
-
-![golang clean architecture](https://github.com/bxcodec/go-clean-arch/raw/master/clean-arch.png)
-
-The original explanation about this project's structure can read from this medium's post : https://medium.com/@imantumorang/golang-clean-archithecture-efd6d7c43047.
-It may be different already, but the concept still the same in application level, also you can see the change log from v1 to current version in Master.
-
-### How To Run This Project
-
-> Make Sure you have run the article.sql in your mysql
-
-Since the project is already use Go Module, I recommend to put the source code in any folder but GOPATH.
-
-#### Run the Testing
+### 方式一：使用 Docker 启动 (推荐)
 
 ```bash
-$ make tests
+# 1. 克隆仓库
+git clone https://github.com/Guyuepp/go-clean-arch.git
+cd go-clean-arch
+
+# 2. 启动服务 (包含 MySQL 和 Redis)
+make up
+
+# 3. 服务将运行在 :8080 端口
+
 ```
 
-#### Run the Applications
+### 方式二：本地运行
 
-Here is the steps to run it with `docker-compose`
+1. 修改 `config/config.yaml` 中的数据库配置。
+2. 运行项目：
 
 ```bash
-#move to directory
-$ cd workspace
+go mod tidy
+go run main.go
 
-# Clone into your workspace
-$ git clone https://github.com/bxcodec/go-clean-arch.git
-
-#move to project
-$ cd go-clean-arch
-
-# copy the example.env to .env
-$ cp example.env .env
-
-# Run the application
-$ make up
-
-# The hot reload will running
-
-# Execute the call in another terminal
-$ curl localhost:9090/articles
 ```
 
-### Tools Used:
+## 📝 API 文档
 
-In this project, I use some tools listed below. But you can use any similar library that have the same purposes. But, well, different library will have different implementation type. Just be creative and use anything that you really need.
+| 方法 | 路径 | 描述 |
+| --- | --- | --- |
+| GET | `/articles` | 获取文章列表 |
+| GET | `/articles/:id` | 获取文章详情 |
+| GET | `/ranks/:type` | **获取今日/历史热榜** |
+| POST | `/articles/:id/like` | **点赞文章** (需登录) |
+| POST | `/login` | 用户登录 |
 
-- All libraries listed in [`go.mod`](https://github.com/bxcodec/go-clean-arch/blob/master/go.mod)
-- ["github.com/vektra/mockery".](https://github.com/vektra/mockery) To Generate Mocks for testing needs.
+## 💡 难点与解决方案 (Highlights)
+
+### 1. 点赞数据的一致性
+
+为了应对高并发点赞，直接写 MySQL 会造成巨大压力。
+**解决方案**: 采用 `Write-Back` (回写) 策略。先在 Redis 中进行原子计数，通过定时任务/异步协程将增量数据同步至 MySQL，实现了性能与最终一致性的平衡。
