@@ -73,6 +73,70 @@ INSERT INTO `article` VALUES (
 /*!40000 ALTER TABLE `article` ENABLE KEYS */;
 UNLOCK TABLES;
 
+-- copy articles
+INSERT INTO article (title, content, user_id, created_at, updated_at)
+SELECT 
+    CONCAT(title, ' - Copy ', FLOOR(RAND() * 1000)),
+    content, 
+    user_id, 
+    NOW(), 
+    NOW()
+FROM article;
+
+INSERT INTO article (title, content, user_id, created_at, updated_at)
+SELECT 
+    CONCAT(title, ' - Copy ', FLOOR(RAND() * 1000)),
+    content, 
+    user_id, 
+    NOW(), 
+    NOW()
+FROM article;
+
+INSERT INTO article (title, content, user_id, created_at, updated_at)
+SELECT 
+    CONCAT(title, ' - Copy ', FLOOR(RAND() * 1000)),
+    content, 
+    user_id, 
+    NOW(), 
+    NOW()
+FROM article;
+
+INSERT INTO article (title, content, user_id, created_at, updated_at)
+SELECT 
+    CONCAT(title, ' - Copy ', FLOOR(RAND() * 1000)),
+    content, 
+    user_id, 
+    NOW(), 
+    NOW()
+FROM article;
+
+INSERT INTO article (title, content, user_id, created_at, updated_at)
+SELECT 
+    CONCAT(title, ' - Copy ', FLOOR(RAND() * 1000)),
+    content, 
+    user_id, 
+    NOW(), 
+    NOW()
+FROM article;
+
+INSERT INTO article (title, content, user_id, created_at, updated_at)
+SELECT 
+    CONCAT(title, ' - Copy ', FLOOR(RAND() * 1000)),
+    content, 
+    user_id, 
+    NOW(), 
+    NOW()
+FROM article;
+
+INSERT INTO article (title, content, user_id, created_at, updated_at)
+SELECT 
+    CONCAT(title, ' - Copy ', FLOOR(RAND() * 1000)),
+    content, 
+    user_id, 
+    NOW(), 
+    NOW()
+FROM article;
+
 --
 -- Table structure for table `article_category`
 --
@@ -138,7 +202,8 @@ CREATE TABLE `user_likes` (
   `user_id` bigint NOT NULL,
   `article_id` bigint NOT NULL,
   `created_at` datetime DEFAULT CURRENT_TIMESTAMP, 
-  PRIMARY KEY (`user_id`, `article_id`)
+  PRIMARY KEY (`user_id`, `article_id`),
+  KEY `idx_article_id` (`article_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 

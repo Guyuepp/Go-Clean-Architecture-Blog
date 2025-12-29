@@ -61,7 +61,7 @@ cd go-clean-arch
 # 2. 启动服务 (包含 MySQL 和 Redis)
 make up
 
-# 3. 服务将运行在 :8080 端口
+# 3. 服务将运行在 :9090 端口
 
 ```
 

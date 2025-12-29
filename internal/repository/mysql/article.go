@@ -204,36 +204,56 @@ func (m *articleRepository) GetByIDs(ctx context.Context, ids []int64) ([]domain
 		res[i] = model.ToDomain()
 	}
 
-	if len(res) < len(ids) {
-		err = domain.ErrNotFound
-	}
-	return res, err
+	// if len(res) < len(ids) {
+	// 	err = domain.ErrNotFound
+	// }
+	return res, nil
 }
 
 func (m *articleRepository) ApplyLikeChanges(ctx context.Context, changes domain.LikeStateChanges) error {
 	return m.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if len(changes.ToRemove) > 0 {
-			aid := make([]int64, len(changes.ToRemove))
-			uid := make([]int64, len(changes.ToRemove))
-			for i := range changes.ToRemove {
-				aid[i] = changes.ToRemove[i].ArticleID
-				uid[i] = changes.ToRemove[i].UserID
-			}
-			if err := tx.
-				Where("article_id = ? AND user_id IN ?", aid, uid).
+
+		for _, row := range changes.ToRemove {
+			if err := tx.Where("article_id = ? AND user_id = ?", row.ArticleID, row.UserID).
 				Delete(&model.UserLike{}).Error; err != nil {
 				return err
 			}
 		}
 
-		if len(changes.ToAdd) > 0 {
-			recs := make([]model.UserLike, 0, len(changes.ToAdd))
-			for _, d := range changes.ToAdd {
-				recs = append(recs, model.NewUserLikeFromDomain(d))
+		// 2. 处理新增 (Insert/Upsert)
+		for _, row := range changes.ToAdd {
+			// 强烈建议这里改成 Clause.OnConflict (Upsert)
+			if err := tx.Clauses(clause.OnConflict{
+				UpdateAll: true,
+			}).Create(&model.UserLike{
+				ArticleID: row.ArticleID,
+				UserID:    row.UserID,
+			}).Error; err != nil {
+				return err
+			}
+		}
+
+		// 3. 【核心修改】提取所有涉及的文章 ID
+		uniqueArticleIDs := make(map[int64]struct{})
+		for _, row := range changes.ToRemove {
+			uniqueArticleIDs[row.ArticleID] = struct{}{}
+		}
+		for _, row := range changes.ToAdd {
+			uniqueArticleIDs[row.ArticleID] = struct{}{}
+		}
+
+		// 4. 【核心修改】精准校准
+		for aid := range uniqueArticleIDs {
+			var realCount int64
+			if err := tx.Model(&model.UserLike{}).
+				Where("article_id = ?", aid).
+				Count(&realCount).Error; err != nil {
+				return err
 			}
 
-			err := tx.Clauses(clause.Insert{Modifier: "IGNORE"}).Create(&recs).Error
-			if err != nil {
+			if err := tx.Model(&model.Article{}).
+				Where("id = ?", aid).
+				UpdateColumn("likes", realCount).Error; err != nil {
 				return err
 			}
 		}

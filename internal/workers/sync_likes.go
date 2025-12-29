@@ -39,7 +39,7 @@ func (s syncLikesWorker) Start(ctx context.Context) {
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 
-	const batchSize = 100
+	const batchSize = 500
 	batch := make([]LikeTask, 0, batchSize)
 	for {
 		select {
