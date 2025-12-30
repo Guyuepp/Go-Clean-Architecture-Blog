@@ -1,4 +1,4 @@
-module github.com/bxcodec/go-clean-arch
+module github.com/Guyuepp/Go-Clean-Architecture-Blog
 
 go 1.24.0
 

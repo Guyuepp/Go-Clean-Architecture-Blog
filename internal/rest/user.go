@@ -4,8 +4,8 @@ import (
 	"context"
 	"net/http"
 
-	"github.com/bxcodec/go-clean-arch/domain"
-	"github.com/bxcodec/go-clean-arch/internal/rest/request"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/domain"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/rest/request"
 	"github.com/gin-gonic/gin"
 )
 

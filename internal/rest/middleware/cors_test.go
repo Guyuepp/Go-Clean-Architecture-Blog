@@ -8,7 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 
-	"github.com/bxcodec/go-clean-arch/internal/rest/middleware"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/rest/middleware"
 )
 
 func TestCORS(t *testing.T) {

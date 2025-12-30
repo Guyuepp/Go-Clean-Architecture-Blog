@@ -4,7 +4,7 @@ import (
 	"context"
 	"time"
 
-	"github.com/bxcodec/go-clean-arch/domain"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/domain"
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
 )

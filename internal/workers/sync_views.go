@@ -5,7 +5,7 @@ import (
 	"log"
 	"time"
 
-	"github.com/bxcodec/go-clean-arch/domain"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/domain"
 	"github.com/sirupsen/logrus"
 )
 

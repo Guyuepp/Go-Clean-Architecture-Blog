@@ -1,7 +1,7 @@
 package request
 
 import (
-	"github.com/bxcodec/go-clean-arch/domain"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/domain"
 )
 
 // Article is the request payload for creating or updating an article

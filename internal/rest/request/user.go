@@ -1,6 +1,6 @@
 package request
 
-import "github.com/bxcodec/go-clean-arch/domain"
+import "github.com/Guyuepp/Go-Clean-Architecture-Blog/domain"
 
 type User struct {
 	Name     string `json:"name"`

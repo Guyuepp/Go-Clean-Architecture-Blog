@@ -18,14 +18,14 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
-	mysqlRepo "github.com/bxcodec/go-clean-arch/internal/repository/mysql"
-	myRedisCache "github.com/bxcodec/go-clean-arch/internal/repository/redis"
-	"github.com/bxcodec/go-clean-arch/internal/workers"
+	mysqlRepo "github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/repository/mysql"
+	myRedisCache "github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/repository/redis"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/workers"
 
-	"github.com/bxcodec/go-clean-arch/internal/rest"
-	"github.com/bxcodec/go-clean-arch/internal/rest/middleware"
-	"github.com/bxcodec/go-clean-arch/internal/usecase/article"
-	"github.com/bxcodec/go-clean-arch/internal/usecase/user"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/rest"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/rest/middleware"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/usecase/article"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/usecase/user"
 	"github.com/joho/godotenv"
 )
 

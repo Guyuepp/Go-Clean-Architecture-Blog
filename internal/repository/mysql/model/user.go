@@ -3,7 +3,7 @@ package model
 import (
 	"time"
 
-	"github.com/bxcodec/go-clean-arch/domain"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/domain"
 )
 
 type User struct {

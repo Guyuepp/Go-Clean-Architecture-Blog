@@ -1,7 +1,7 @@
 package response // 建议包名就叫 response
 
 import (
-	"github.com/bxcodec/go-clean-arch/domain"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/domain"
 )
 
 type Article struct {

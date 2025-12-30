@@ -6,7 +6,7 @@ import (
 	"hash/crc32"
 	"hash/fnv"
 
-	"github.com/bxcodec/go-clean-arch/domain"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/domain"
 	"github.com/redis/go-redis/v9"
 )
 

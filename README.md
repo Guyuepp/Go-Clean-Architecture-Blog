@@ -55,8 +55,8 @@
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/Guyuepp/go-clean-arch.git
-cd go-clean-arch
+git clone https://github.com/Guyuepp/Go-Clean-Architecture-Blog.git
+cd Go-Clean-Architecture-Blog
 
 # 2. 启动服务 (包含 MySQL 和 Redis)
 make up
