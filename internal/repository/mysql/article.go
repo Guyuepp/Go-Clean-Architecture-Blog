@@ -9,6 +9,7 @@ import (
 	"github.com/bxcodec/go-clean-arch/domain"
 	"github.com/bxcodec/go-clean-arch/internal/repository"
 	"github.com/bxcodec/go-clean-arch/internal/repository/mysql/model"
+	"github.com/sirupsen/logrus"
 )
 
 type articleRepository struct {
@@ -22,17 +23,16 @@ func NewArticleRepository(db *gorm.DB) *articleRepository {
 	return &articleRepository{db}
 }
 
-// TODO 从数据库中拿文章时应该使用连表查询把user信息也查出来
-
-func (m *articleRepository) Fetch(ctx context.Context, cursor string, num int64) (res []domain.Article, nextCursor string, err error) {
+func (m *articleRepository) Fetch(ctx context.Context, cursor string, num int64) (res []domain.Article, err error) {
 	var articles []model.Article
 	decodedCursor, err := repository.DecodeCursor(cursor)
 	if err != nil && cursor != "" {
-		return nil, "", domain.ErrBadParamInput
+		return nil, domain.ErrBadParamInput
 	}
 
 	repository.PageVerify(&num)
-	err = m.DB.WithContext(ctx).Where("created_at > ?", decodedCursor).
+	err = m.DB.WithContext(ctx).Select("id, title, user_id, updated_at, created_at, views, likes").
+		Where("created_at > ?", decodedCursor).
 		Order("created_at").
 		Limit(int(num)).
 		Find(&articles).
@@ -45,9 +45,7 @@ func (m *articleRepository) Fetch(ctx context.Context, cursor string, num int64)
 	for _, article := range articles {
 		res = append(res, article.ToDomain())
 	}
-	if len(res) == int(num) {
-		nextCursor = repository.EncodeCursor(res[len(res)-1].CreatedAt)
-	}
+
 	return
 }
 
@@ -212,28 +210,56 @@ func (m *articleRepository) GetByIDs(ctx context.Context, ids []int64) ([]domain
 
 func (m *articleRepository) ApplyLikeChanges(ctx context.Context, changes domain.LikeStateChanges) error {
 	return m.DB.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		filteredAdd := make([]model.UserLike, 0, len(changes.ToAdd))
+		if len(changes.ToAdd) > 0 {
+			toAddIDs := make([]int64, 0, len(changes.ToAdd))
+			seen := make(map[int64]bool)
+			for _, row := range changes.ToAdd {
+				if !seen[row.ArticleID] {
+					toAddIDs = append(toAddIDs, row.ArticleID)
+					seen[row.ArticleID] = true
+				}
+			}
 
-		for _, row := range changes.ToRemove {
-			if err := tx.Where("article_id = ? AND user_id = ?", row.ArticleID, row.UserID).
-				Delete(&model.UserLike{}).Error; err != nil {
+			var validIDs []int64
+			if err := tx.Model(&model.Article{}).
+				Where("id IN ?", toAddIDs).
+				Pluck("id", &validIDs).Error; err != nil {
+				return err
+			}
+
+			validMap := make(map[int64]bool)
+			for _, id := range validIDs {
+				validMap[id] = true
+			}
+
+			for _, row := range changes.ToAdd {
+				if validMap[row.ArticleID] {
+					filteredAdd = append(filteredAdd, model.NewUserLikeFromDomain(row))
+				} else {
+					logrus.Warnf("Dropped orphan like for article %d", row.ArticleID)
+				}
+			}
+		}
+		if len(changes.ToRemove) > 0 {
+			toRemove := make([]model.UserLike, len(changes.ToRemove))
+			for _, row := range changes.ToRemove {
+				toRemove = append(toRemove, model.NewUserLikeFromDomain(row))
+			}
+			if err := tx.Delete(toRemove).Error; err != nil {
 				return err
 			}
 		}
 
-		// 2. 处理新增 (Insert/Upsert)
-		for _, row := range changes.ToAdd {
-			// 强烈建议这里改成 Clause.OnConflict (Upsert)
+		if len(filteredAdd) > 0 {
 			if err := tx.Clauses(clause.OnConflict{
 				UpdateAll: true,
-			}).Create(&model.UserLike{
-				ArticleID: row.ArticleID,
-				UserID:    row.UserID,
-			}).Error; err != nil {
+			}).Create(&filteredAdd).Error; err != nil {
 				return err
 			}
+
 		}
 
-		// 3. 【核心修改】提取所有涉及的文章 ID
 		uniqueArticleIDs := make(map[int64]struct{})
 		for _, row := range changes.ToRemove {
 			uniqueArticleIDs[row.ArticleID] = struct{}{}
@@ -242,8 +268,8 @@ func (m *articleRepository) ApplyLikeChanges(ctx context.Context, changes domain
 			uniqueArticleIDs[row.ArticleID] = struct{}{}
 		}
 
-		// 4. 【核心修改】精准校准
 		for aid := range uniqueArticleIDs {
+
 			var realCount int64
 			if err := tx.Model(&model.UserLike{}).
 				Where("article_id = ?", aid).
@@ -283,4 +309,15 @@ func (m *articleRepository) FetchArticlesByLikes(ctx context.Context, limit int6
 		ars[i] = res[i].ToDomain()
 	}
 	return ars, err
+}
+
+func (m *articleRepository) FetchIDs(ctx context.Context, cursor, limit int64) (ids []int64, err error) {
+	err = m.DB.WithContext(ctx).
+		Model(&model.Article{}).
+		Select("id").
+		Where("id > ?", cursor).
+		Order("id").
+		Limit(int(limit)).
+		Find(&ids).Error
+	return
 }

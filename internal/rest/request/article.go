@@ -6,6 +6,7 @@ import (
 
 // Article is the request payload for creating or updating an article
 type Article struct {
+	ID      int64  `json:"id"`
 	Title   string `json:"title" binding:"required"`
 	Content string `json:"content" binding:"required"`
 }
@@ -13,6 +14,7 @@ type Article struct {
 // ToDomain: Request -> Domain
 func (r *Article) ToDomain() domain.Article {
 	return domain.Article{
+		ID:      r.ID,
 		Title:   r.Title,
 		Content: r.Content,
 	}

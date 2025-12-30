@@ -32,6 +32,8 @@ type UserRepository interface {
 	// GetByUsername retrieves a user by their username.
 	// Used during login to verify credentials.
 	GetByUsername(ctx context.Context, username string) (User, error)
+
+	GetByIDs(ctx context.Context, userIDs []int64) ([]User, error)
 }
 
 // UserUsecase defines the business logic contract for user operations.

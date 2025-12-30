@@ -10,24 +10,27 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/bxcodec/go-clean-arch/domain"
+	"github.com/bxcodec/go-clean-arch/internal/repository"
 )
 
-type Service struct {
+type service struct {
 	articleRepo     domain.ArticleRepository
 	userRepo        domain.UserRepository
 	articleCache    domain.ArticleCache
 	syncLikesWorker domain.SyncLikesWorker
+	bloomRepo       domain.BloomRepository
 }
 
-var _ domain.ArticleUsecase = (*Service)(nil)
+var _ domain.ArticleUsecase = (*service)(nil)
 
 // NewService will create a new article service object
-func NewService(a domain.ArticleRepository, u domain.UserRepository, ac domain.ArticleCache, s domain.SyncLikesWorker) *Service {
-	return &Service{
+func NewService(a domain.ArticleRepository, u domain.UserRepository, ac domain.ArticleCache, s domain.SyncLikesWorker, b domain.BloomRepository) *service {
+	return &service{
 		articleRepo:     a,
 		userRepo:        u,
 		articleCache:    ac,
 		syncLikesWorker: s,
+		bloomRepo:       b,
 	}
 }
 
@@ -36,71 +39,73 @@ func NewService(a domain.ArticleRepository, u domain.UserRepository, ac domain.A
 * Look how this works in this package explanation
 * in godoc: https://godoc.org/golang.org/x/sync/errgroup#ex-Group--Pipeline
  */
-func (a *Service) fillUserDetails(ctx context.Context, data []domain.Article) ([]domain.Article, error) {
-	g, ctx := errgroup.WithContext(ctx)
-	// Get the User's id
-	mapUsers := map[int64]domain.User{}
-
-	for _, article := range data { //nolint
-		mapUsers[article.User.ID] = domain.User{}
-	}
-	// Using goroutine to fetch the User's detail
-	chanUser := make(chan domain.User)
-	for UserID := range mapUsers {
-		UserID := UserID
-		g.Go(func() error {
-			res, err := a.userRepo.GetByID(ctx, UserID)
-			if err != nil {
-				return err
-			}
-			chanUser <- res
-			return nil
-		})
+func (a *service) fillUserDetails(ctx context.Context, data []domain.Article) ([]domain.Article, error) {
+	if len(data) == 0 {
+		return data, nil
 	}
 
-	go func() {
-		defer close(chanUser)
-		err := g.Wait()
-		if err != nil {
-			logrus.Error(err)
-			return
-		}
-
-	}()
-
-	for User := range chanUser {
-		if User != (domain.User{}) {
-			mapUsers[User.ID] = User
+	// 1. 收集所有不重复的 UserID
+	userIDs := make([]int64, 0, len(data))
+	existMap := make(map[int64]bool)
+	for _, item := range data {
+		if !existMap[item.User.ID] {
+			userIDs = append(userIDs, item.User.ID)
+			existMap[item.User.ID] = true
 		}
 	}
 
-	if err := g.Wait(); err != nil {
+	// 2. 批量查询 (只用 1 次 DB 查询，代替之前的 N 次)
+	users, err := a.userRepo.GetByIDs(ctx, userIDs)
+	if err != nil {
 		return nil, err
 	}
 
-	// merge the User's data
-	for index, item := range data { //nolint
-		if a, ok := mapUsers[item.User.ID]; ok {
-			data[index].User = a
+	// 3. 转成 Map 方便查找
+	userMap := make(map[int64]domain.User)
+	for _, u := range users {
+		userMap[u.ID] = u
+	}
+
+	// 4. 填充回 Article
+	for i := range data {
+		if u, ok := userMap[data[i].User.ID]; ok {
+			data[i].User = u
 		}
 	}
+
 	return data, nil
 }
 
-func (a *Service) Fetch(ctx context.Context, cursor string, num int64) (res []domain.Article, nextCursor string, err error) {
-	res, nextCursor, err = a.articleRepo.Fetch(ctx, cursor, num)
+func (a *service) Fetch(ctx context.Context, cursor string, num int64) ([]domain.Article, string, error) {
+	if cursor == "" {
+		res, err := a.articleCache.GetHome(ctx)
+		if err != nil {
+			logrus.Warnf("failed to GetHome from redis: %v", err)
+		} else {
+			return res, repository.EncodeCursor(res[len(res)-1].CreatedAt), nil
+		}
+	}
+
+	res, err := a.articleRepo.Fetch(ctx, cursor, num)
 	if err != nil {
 		return nil, "", err
 	}
 
 	res, err = a.fillUserDetails(ctx, res)
 	if err != nil {
-		nextCursor = ""
+		return nil, "", err
 	}
-	return
+
+	if cursor == "" {
+		go func(data []domain.Article) {
+			a.articleCache.SetHome(context.Background(), res)
+		}(res)
+	}
+
+	return res, repository.EncodeCursor(res[len(res)-1].CreatedAt), nil
 }
 
-func (a *Service) GetByID(ctx context.Context, id int64) (res domain.Article, err error) {
+func (a *service) GetByID(ctx context.Context, id int64) (res domain.Article, err error) {
 	res, err = a.articleCache.GetArticle(ctx, id)
 
 	if err != nil {
@@ -145,12 +150,15 @@ func (a *Service) GetByID(ctx context.Context, id int64) (res domain.Article, er
 	}
 }
 
-func (a *Service) Update(ctx context.Context, ar *domain.Article) (err error) {
+func (a *service) Update(ctx context.Context, ar *domain.Article) (err error) {
+	if err := a.mustExists(ctx, ar.ID); err != nil {
+		return nil
+	}
 	ar.UpdatedAt = time.Now()
 	return a.articleRepo.Update(ctx, ar)
 }
 
-func (a *Service) GetByTitle(ctx context.Context, title string) (res domain.Article, err error) {
+func (a *service) GetByTitle(ctx context.Context, title string) (res domain.Article, err error) {
 	res, err = a.articleRepo.GetByTitle(ctx, title)
 	if err != nil {
 		return
@@ -165,7 +173,7 @@ func (a *Service) GetByTitle(ctx context.Context, title string) (res domain.Arti
 	return
 }
 
-func (a *Service) Store(ctx context.Context, m *domain.Article) (err error) {
+func (a *service) Store(ctx context.Context, m *domain.Article) (err error) {
 	existedArticle, _ := a.GetByTitle(ctx, m.Title) // ignore if any error
 	if existedArticle != (domain.Article{}) {
 		return domain.ErrConflict
@@ -175,6 +183,9 @@ func (a *Service) Store(ctx context.Context, m *domain.Article) (err error) {
 	if err != nil {
 		return
 	}
+
+	a.bloomRepo.Add(ctx, m.ID)
+
 	userDetail, err := a.userRepo.GetByID(ctx, m.User.ID)
 	if err != nil {
 		return
@@ -184,7 +195,11 @@ func (a *Service) Store(ctx context.Context, m *domain.Article) (err error) {
 	return
 }
 
-func (a *Service) Delete(ctx context.Context, id int64) (err error) {
+func (a *service) Delete(ctx context.Context, id int64) (err error) {
+	if err := a.mustExists(ctx, id); err != nil {
+		return nil
+	}
+
 	existedArticle, err := a.articleRepo.GetByID(ctx, id)
 	if err != nil {
 		return
@@ -203,11 +218,19 @@ func (a *Service) Delete(ctx context.Context, id int64) (err error) {
 	return
 }
 
-func (a *Service) AddViews(ctx context.Context, id int64, deltaViews int64) error {
+func (a *service) AddViews(ctx context.Context, id int64, deltaViews int64) error {
+	if err := a.mustExists(ctx, id); err != nil {
+		return nil
+	}
+
 	return a.articleRepo.AddViews(ctx, id, deltaViews)
 }
 
-func (a *Service) AddLikeRecord(ctx context.Context, likeRecord domain.UserLike) (bool, error) {
+func (a *service) AddLikeRecord(ctx context.Context, likeRecord domain.UserLike) (bool, error) {
+	if err := a.mustExists(ctx, likeRecord.ArticleID); err != nil {
+		return false, err
+	}
+
 	ok := false
 	ok1, err := a.articleCache.AddLikeRecord(ctx, likeRecord)
 	if err != nil {
@@ -255,7 +278,11 @@ func (a *Service) AddLikeRecord(ctx context.Context, likeRecord domain.UserLike)
 	return ok, nil
 }
 
-func (a *Service) RemoveLikeRecord(ctx context.Context, likeRecord domain.UserLike) (bool, error) {
+func (a *service) RemoveLikeRecord(ctx context.Context, likeRecord domain.UserLike) (bool, error) {
+	if err := a.mustExists(ctx, likeRecord.ArticleID); err != nil {
+		return false, err
+	}
+
 	ok := false
 	ok1, err := a.articleCache.DecrLikeRecord(ctx, likeRecord)
 	if err != nil {
@@ -303,7 +330,7 @@ func (a *Service) RemoveLikeRecord(ctx context.Context, likeRecord domain.UserLi
 	return ok, nil
 }
 
-func (a *Service) FetchDailyRank(ctx context.Context, limit int64) ([]domain.Article, error) {
+func (a *service) FetchDailyRank(ctx context.Context, limit int64) ([]domain.Article, error) {
 	res, err := a.articleCache.GetDailyRank(ctx, limit)
 	if err != nil {
 		logrus.Errorf("failed to GetDailyRank from redis: %v", err)
@@ -352,7 +379,7 @@ func (a *Service) FetchDailyRank(ctx context.Context, limit int64) ([]domain.Art
 	return res, nil
 }
 
-func (a *Service) FetchHistoryRank(ctx context.Context, limit int64) ([]domain.Article, error) {
+func (a *service) FetchHistoryRank(ctx context.Context, limit int64) ([]domain.Article, error) {
 	res, err := a.articleCache.GetHistoryRank(ctx, limit)
 	if errors.Is(err, domain.ErrCacheMiss) {
 		res, err := a.articleRepo.FetchArticlesByLikes(ctx, 100) // NOTE 这里定义了默认取最多100篇
@@ -419,4 +446,67 @@ func (a *Service) FetchHistoryRank(ctx context.Context, limit int64) ([]domain.A
 		}
 	}
 	return res, nil
+}
+
+func (a service) InitBloomFilter(ctx context.Context) error {
+	const (
+		BatchSize   = 2000
+		WorkerCount = 5
+	)
+
+	idBatchChan := make(chan []int64, WorkerCount*2)
+	g, ctx := errgroup.WithContext(ctx)
+
+	// 3. 启动消费者 (Redis Writers)
+	for range WorkerCount {
+		g.Go(func() error {
+			for ids := range idBatchChan {
+				// 调用 Redis Repo 的 BulkAdd
+				if err := a.bloomRepo.BulkAdd(ctx, ids); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	}
+
+	// 4. 启动生产者 (MySQL Reader)
+	g.Go(func() error {
+		defer close(idBatchChan)
+		var cursor int64 = 0
+		for {
+			// 调用 MySQL Repo 的 FetchIDs
+			ids, err := a.articleRepo.FetchIDs(ctx, cursor, BatchSize)
+			if err != nil {
+				return err
+			}
+			if len(ids) == 0 {
+				break
+			}
+
+			select {
+			case idBatchChan <- ids:
+				cursor = ids[len(ids)-1]
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+		return nil
+	})
+
+	// 5. 等待完成
+	if err := g.Wait(); err != nil {
+		logrus.Errorf("bloom filter init failed: %v", err)
+		return err
+	}
+	return nil
+}
+
+func (a *service) mustExists(ctx context.Context, id int64) error {
+	exists, err := a.bloomRepo.Exists(ctx, id)
+	if err == nil && !exists {
+		return domain.ErrNotFound
+	}
+
+	return nil
 }

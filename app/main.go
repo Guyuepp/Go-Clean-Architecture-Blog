@@ -30,11 +30,12 @@ import (
 )
 
 const (
-	defaultTimeout     = 30
-	defaultAddress     = ":9090"
-	defaultCacheDB     = 0
-	dbMaxRetry         = 10
-	dbRetryIntervalSec = 2
+	defaultTimeout      = 30
+	defaultAddress      = ":9090"
+	defaultCacheDB      = 0
+	defaultBloomBitSize = 10000000
+	dbMaxRetry          = 10
+	dbRetryIntervalSec  = 2
 )
 
 func init() {
@@ -141,6 +142,13 @@ func main() {
 	userRepo := mysqlRepo.NewUserRepository(db)
 	articleRepo := mysqlRepo.NewArticleRepository(db)
 	articleCache := myRedisCache.NewArticleCache(client)
+	bloomBitSizeStr := os.Getenv("BLOOM_FILTER_SIZE")
+	bloomBitSize, err := strconv.ParseUint(bloomBitSizeStr, 10, 64)
+	if err != nil {
+		log.Printf("failed to parse bloom bit size, using default size")
+		bloomBitSize = defaultBloomBitSize
+	}
+	bloomRepo := myRedisCache.NewRedisBloomRepo(client, bloomBitSize)
 
 	// Start worker
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -160,12 +168,18 @@ func main() {
 		log.Println("failed to parse JWT TTL, using default 24 hours")
 		jwtTTL = 24
 	}
-	articleSvc := article.NewService(articleRepo, userRepo, articleCache, likes_syncer)
+	articleSvc := article.NewService(articleRepo, userRepo, articleCache, likes_syncer, bloomRepo)
 	userSvc := user.NewService(userRepo, jwtSecret, time.Duration(jwtTTL)*time.Hour)
 	articleHandler := rest.NewArticleHandler(articleSvc)
 	userHandler := rest.NewUserHandler(userSvc)
 
 	authMiddleware := middleware.AuthMiddleware(string(jwtSecret))
+
+	// Prepare bloom filter
+	if err := articleSvc.InitBloomFilter(ctx); err != nil {
+		log.Printf("failed to init bloom filter: %v\n", err)
+		return
+	}
 
 	// Register routes
 	route.POST("/register", userHandler.Register)

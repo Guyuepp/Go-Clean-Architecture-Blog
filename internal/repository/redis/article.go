@@ -22,6 +22,7 @@ const (
 	KeyLikesBuffer            = "article:likes:%d"
 	KeyViewsBuffer            = "article:views:buffer"
 	KeyViewsProcessing        = "article:views:processing"
+	KeyHome                   = "article:home"
 )
 
 type articleCache struct {
@@ -34,6 +35,30 @@ func NewArticleCache(client *redis.Client) *articleCache {
 	return &articleCache{
 		client,
 	}
+}
+
+func (c *articleCache) GetHome(ctx context.Context) ([]domain.Article, error) {
+	key := KeyHome
+	data, err := c.client.Get(ctx, key).Bytes()
+	if err != nil {
+		return nil, err
+	}
+	var res []domain.Article
+	err = json.Unmarshal([]byte(data), &res)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
+
+func (c *articleCache) SetHome(ctx context.Context, ars []domain.Article) error {
+	key := KeyHome
+	data, err := json.Marshal(ars)
+	if err != nil {
+		return err
+	}
+	err = c.client.Set(ctx, key, data, 1*time.Minute).Err()
+	return err
 }
 
 func (c *articleCache) GetArticle(ctx context.Context, id int64) (res domain.Article, err error) {

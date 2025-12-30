@@ -23,7 +23,7 @@ type ArticleRepository interface {
 	// cursor: for pagination, pass the last article ID or empty string for the first page.
 	// num: number of articles to fetch per page.
 	// Returns: articles, next cursor for the next page, and error if any.
-	Fetch(ctx context.Context, cursor string, num int64) (res []Article, nextCursor string, err error)
+	Fetch(ctx context.Context, cursor string, num int64) (res []Article, err error)
 
 	// GetByID retrieves a single article by its ID.
 	// Returns ErrNotFound if the article doesn't exist.
@@ -59,10 +59,14 @@ type ArticleRepository interface {
 	ApplyLikeChanges(ctx context.Context, changes LikeStateChanges) error
 
 	FetchArticlesByLikes(ctx context.Context, limit int64) ([]Article, error)
+
+	FetchIDs(ctx context.Context, cursor, limit int64) ([]int64, error)
 }
 
 type ArticleCache interface {
 	// Article related
+	GetHome(context.Context) ([]Article, error)
+	SetHome(context.Context, []Article) error
 	GetArticle(ctx context.Context, id int64) (res Article, err error)
 	GetArticleByIDs(ctx context.Context, ids []int64) (res []Article, err error)
 	SetArticle(ctx context.Context, ar *Article) (err error)
@@ -103,4 +107,5 @@ type ArticleUsecase interface {
 	RemoveLikeRecord(ctx context.Context, likeRecord UserLike) (bool, error)
 	FetchDailyRank(ctx context.Context, limit int64) ([]Article, error)
 	FetchHistoryRank(ctx context.Context, limit int64) ([]Article, error)
+	InitBloomFilter(ctx context.Context) error
 }

@@ -78,13 +78,42 @@ go run main.go
 
 ## 📝 API 文档
 
-| 方法 | 路径 | 描述 |
-| --- | --- | --- |
-| GET | `/articles` | 获取文章列表 |
-| GET | `/articles/:id` | 获取文章详情 |
-| GET | `/ranks/:type` | **获取今日/历史热榜** |
-| POST | `/articles/:id/like` | **点赞文章** (需登录) |
-| POST | `/login` | 用户登录 |
+API 列表:
+| 方法 | 路径 | 参数 | 描述 |
+| --- | --- | --- | --- |
+| GET | `/articles` |  | 获取文章列表 |
+| GET | `/articles/:id` | id(path) | 获取文章详情 |
+| GET | `/articles/ranks` | type(daily|historical), limit | **获取今日/历史热榜** |
+| POST | `/articles` | JSON | **创建文章** (需登录) |
+| POST | `/articles/:id/like` |  | **点赞文章** (需登录) |
+| DELETE | `/articles/:id/like` |  | **取消点赞文章** (需登录) |
+| POST | `/login` | JSON | 用户登录 |
+| POST | `/register` | JSON | 用户注册 |
+
+POST /articles 请求体定义
+```json
+{
+  "title": "文章标题",
+  "content": "文章内容"
+}
+```
+
+POST /login 请求体定义
+```json
+{
+  "username": "your_username",
+  "password": "your_password"
+}
+```
+
+POST /register 请求体定义
+```json
+{
+  "username": "your_username",
+  "password": "your_password",
+  "name": "your_name"
+}
+```
 
 ## 💡 难点与解决方案 (Highlights)
 

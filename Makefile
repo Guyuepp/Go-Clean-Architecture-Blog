@@ -38,7 +38,7 @@ dev-env-test: dev-env ## Run application (within a Docker-Compose help)
 	docker-compose up web
 
 dev-air: $(AIR) ## Starts AIR ( Continuous Development app).
-	air
+	air > ./logs
 
 docker-stop:
 	@ docker-compose down
