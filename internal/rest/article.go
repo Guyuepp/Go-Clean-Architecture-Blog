@@ -62,7 +62,6 @@ func (a *ArticleHandler) FetchArticle(c *gin.Context) {
 	num, err := strconv.Atoi(numS)
 	if err != nil || num < PageMinNum || num > PageMaxNum {
 		num = DefaultPageNum
-		logrus.Error("Invalid param 'num'")
 	}
 
 	cursor := c.Query("cursor")

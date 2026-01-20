@@ -8,10 +8,10 @@ type User struct {
 	Created_at string `json:"created_at"`
 }
 
-func NewUserFromDomain(a *domain.User) User {
-	return User{
+func NewUserFromDomain(a *domain.User) *User {
+	return &User{
 		Name:       a.Name,
 		Username:   a.Username,
-		Created_at: a.CreatedAt.Format("2006-01-02 15:04:05"),
+		Created_at: a.CreatedAt.Format(DateTimeFormat),
 	}
 }

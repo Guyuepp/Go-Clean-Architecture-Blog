@@ -21,4 +21,6 @@ var (
 	ErrInvalidCredentials = errors.New("invalid credentials")
 	// ErrCacheMiss will throw if the requested item is not found in cache and needs to be fetched from the primary datastore
 	ErrCacheMiss = errors.New("cache miss")
+	// ErrForbidden will throw if the user is forbidden to access the resource
+	ErrForbidden = errors.New("you are forbidden to access this resource")
 )

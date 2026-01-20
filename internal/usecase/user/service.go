@@ -9,14 +9,14 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-type Service struct {
+type service struct {
 	userRepo  domain.UserRepository
 	jwtSecret []byte
 	ttl       time.Duration
 }
 
-func NewService(r domain.UserRepository, jwtSecret []byte, ttl time.Duration) *Service {
-	return &Service{
+func NewService(r domain.UserRepository, jwtSecret []byte, ttl time.Duration) *service {
+	return &service{
 		userRepo:  r,
 		jwtSecret: jwtSecret,
 		ttl:       ttl,
@@ -33,7 +33,7 @@ func checkPasswordHash(password, hash string) bool {
 	return err == nil
 }
 
-func (s *Service) Register(ctx context.Context, name, username, password string) error {
+func (s *service) Register(ctx context.Context, name, username, password string) error {
 	existingUser, err := s.userRepo.GetByUsername(ctx, username)
 	if err == nil && existingUser.ID != 0 {
 		return domain.ErrUserAlreadyExists
@@ -55,7 +55,7 @@ func (s *Service) Register(ctx context.Context, name, username, password string)
 	return s.userRepo.Insert(ctx, user)
 }
 
-func (s *Service) Login(ctx context.Context, username, password string) (string, error) {
+func (s *service) Login(ctx context.Context, username, password string) (string, error) {
 	user, err := s.userRepo.GetByUsername(ctx, username)
 	if err != nil {
 		return "", domain.ErrUserNotFound
@@ -71,7 +71,7 @@ func (s *Service) Login(ctx context.Context, username, password string) (string,
 	return token, nil
 }
 
-func (s *Service) generateJWT(userID int64, username string) (string, error) {
+func (s *service) generateJWT(userID int64, username string) (string, error) {
 	// 定义 Claims (载荷)
 	claims := jwt.MapClaims{
 		"user_id":  userID,
@@ -87,7 +87,7 @@ func (s *Service) generateJWT(userID int64, username string) (string, error) {
 	return token.SignedString(s.jwtSecret)
 }
 
-func (s *Service) EditPassword(ctx context.Context, id int64, oldPassword, newPassword string) error {
+func (s *service) EditPassword(ctx context.Context, id int64, oldPassword, newPassword string) error {
 	user, err := s.userRepo.GetByID(ctx, id)
 	if err != nil {
 		return domain.ErrUserNotFound

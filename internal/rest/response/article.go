@@ -4,6 +4,8 @@ import (
 	"github.com/Guyuepp/Go-Clean-Architecture-Blog/domain"
 )
 
+const DateTimeFormat = "2006-01-02 15:04:05"
+
 type Article struct {
 	ID        int64  `json:"id"`
 	Title     string `json:"title"`
@@ -22,8 +24,8 @@ func NewArticleFromDomain(a *domain.Article) Article {
 		Title:     a.Title,
 		Content:   a.Content,
 		UserName:  a.User.Name,
-		UpdatedAt: a.UpdatedAt.Format("2006-01-02 15:04:05"),
-		CreatedAt: a.CreatedAt.Format("2006-01-02 15:04:05"),
+		UpdatedAt: a.UpdatedAt.Format(DateTimeFormat),
+		CreatedAt: a.CreatedAt.Format(DateTimeFormat),
 		Views:     a.Views,
 		Likes:     a.Likes,
 	}

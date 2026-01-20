@@ -25,6 +25,7 @@ import (
 	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/rest"
 	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/rest/middleware"
 	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/usecase/article"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/usecase/comment"
 	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/usecase/user"
 	"github.com/joho/godotenv"
 )
@@ -141,6 +142,7 @@ func main() {
 	// Prepare Repository
 	userRepo := mysqlRepo.NewUserRepository(db)
 	articleRepo := mysqlRepo.NewArticleRepository(db)
+	commentRepo := mysqlRepo.NewCommentRepository(db)
 	articleCache := myRedisCache.NewArticleCache(client)
 	bloomBitSizeStr := os.Getenv("BLOOM_FILTER_SIZE")
 	bloomBitSize, err := strconv.ParseUint(bloomBitSizeStr, 10, 64)
@@ -170,8 +172,10 @@ func main() {
 	}
 	articleSvc := article.NewService(articleRepo, userRepo, articleCache, likes_syncer, bloomRepo)
 	userSvc := user.NewService(userRepo, jwtSecret, time.Duration(jwtTTL)*time.Hour)
+	commentSvc := comment.NewService(commentRepo, bloomRepo)
 	articleHandler := rest.NewArticleHandler(articleSvc)
 	userHandler := rest.NewUserHandler(userSvc)
+	commentHandler := rest.NewCommentHandler(commentSvc)
 
 	authMiddleware := middleware.AuthMiddleware(string(jwtSecret))
 
@@ -190,6 +194,8 @@ func main() {
 
 	route.GET("/articles/ranks", articleHandler.FetchRank)
 
+	route.GET("/articles/:id/comments", commentHandler.FetchCommentsByArticle)
+
 	authorized := route.Group("/")
 	authorized.Use(authMiddleware)
 	{
@@ -197,6 +203,8 @@ func main() {
 		authorized.DELETE("/articles/:id", articleHandler.Delete)
 		authorized.POST("/articles/:id/like", articleHandler.Like)
 		authorized.DELETE("/articles/:id/like", articleHandler.Unlike)
+		authorized.POST("/articles/:id/comments", commentHandler.CreateComment)
+		authorized.DELETE("/articles/:id/comments", commentHandler.DeleteComment)
 	}
 
 	// Start Server
