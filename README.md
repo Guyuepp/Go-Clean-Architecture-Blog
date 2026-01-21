@@ -4,6 +4,10 @@
 
 ![Go Version](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go)
 ![Docker](https://img.shields.io/badge/Docker-Enabled-blue?logo=docker)
+![Gin](https://img.shields.io/badge/Gin-05122A?style=flat&logo=gin)
+![Redis](https://img.shields.io/badge/Redis-DC382D?style=flat&logo=redis&logoColor=white)
+![MySQL](https://img.shields.io/badge/MySQL-4479A1?style=flat&logo=mysql&logoColor=white)
+![GORM](https://img.shields.io/badge/GORM-blue?style=flat)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
 ## 📖 项目简介 (Introduction)
@@ -43,7 +47,76 @@
 3.  **Usecase**: 核心业务逻辑流程（如：计算热度分值、组装文章详情）。
 4.  **Delivery (HTTP)**: 负责处理 HTTP 请求，参数校验，调用 Usecase。
 
-![Architecture](./clean-arch.png)
+```mermaid
+graph TB
+    subgraph "交付层 Delivery Layer"
+        A[REST 控制器]
+        A1[中间件<br/>认证/跨域/超时]
+    end
+    
+    subgraph "用例层 Usecase Layer"
+        B[文章服务]
+        C[用户服务]
+        D[评论服务]
+    end
+    
+    subgraph "仓储层 Repository Layer"
+        E[MySQL 仓储]
+        F[Redis 仓储]
+        G[布隆过滤器]
+    end
+    
+    subgraph "领域层 Domain Layer"
+        H[文章实体]
+        I[用户实体]
+        J[评论实体]
+        K[仓储接口]
+    end
+    
+    subgraph "基础设施 Infrastructure"
+        L[(MySQL 数据库)]
+        M[(Redis 缓存)]
+        N[后台任务<br/>同步点赞/浏览]
+    end
+    
+    A --> A1
+    A1 --> B
+    A1 --> C
+    A1 --> D
+    
+    B --> K
+    C --> K
+    D --> K
+    
+    K -.实现.-> E
+    K -.实现.-> F
+    
+    E --> L
+    F --> M
+    G --> M
+    
+    B --> H
+    C --> I
+    D --> J
+    
+    N --> L
+    N --> M
+    
+    style A fill:#e1f5ff
+    style B fill:#fff4e1
+    style C fill:#fff4e1
+    style D fill:#fff4e1
+    style E fill:#e8f5e9
+    style F fill:#e8f5e9
+    style H fill:#f3e5f5
+    style I fill:#f3e5f5
+    style J fill:#f3e5f5
+    style K fill:#f3e5f5
+```
+
+**依赖方向**: 交付层 → 用例层 → 仓储接口 ← 仓储实现 → 基础设施
+
+核心原则：**依赖倒置** (DIP) - 用例层依赖领域层定义的接口，而非具体实现。
 
 ## 🚀 快速开始 (Getting Started)
 
@@ -67,7 +140,7 @@ make up
 
 ### 方式二：本地运行
 
-1. 修改 `config/config.yaml` 中的数据库配置。
+1. 修改 `.env` 中的数据库配置。
 2. 运行项目：
 
 ```bash
@@ -78,7 +151,7 @@ go run main.go
 
 ## 📝 API 文档
 
-API 列表:
+<!-- API 列表:
 | 方法 | 路径 | 参数 | 描述 |
 | --- | --- | --- | --- |
 | GET | `/articles` |  | 获取文章列表 |
@@ -113,17 +186,42 @@ POST /register 请求体定义
   "password": "your_password",
   "name": "your_name"
 }
-```
+``` -->
+### 🔐 Auth 模块
+
+| 方法 | 路径 | 描述 |
+| --- | --- | --- |
+| `POST` | `/register` | 注册新用户 (`username`, `password`, `name`) |
+| `POST` | `/login` | 获取 JWT Token |
+
+### 📝 Article 模块
+
+| 方法 | 路径 | Auth | 描述 |
+| --- | --- | --- | --- |
+| `GET` | `/articles` | ❌ | 分页获取文章列表 |
+| `GET` | `/articles/:id` | ❌ | 获取指定 ID 的文章详情 |
+| `POST` | `/articles` | ✅ | 创建文章 (Body: `title`, `content`) |
+| `POST` | `/articles/:id/comments` | ❌ | 获取指定 ID 的文章评论 |
+| `POST` | `/articles/:id/comments` | ✅ | 在指定 ID 的文章下发布评论或者回复 |
+
+### 🔥 Interaction & Analytics (Redis Powered)
+
+| 方法 | 路径 | 描述 |
+| --- | --- | --- |
+| `GET` | `/articles/ranks` | 获取热榜。参数 `type`: `daily` (今日), `historical` (历史) |
+| `POST` | `/articles/:id/like` | 点赞文章。基于 Redis Set 去重实现 |
+| `DELETE` | `/articles/:id/like` | 取消点赞 |
+
 
 ## 💡 难点与解决方案 (Highlights)
 
-### 1. 点赞数据的一致性
+### 点赞数据的一致性
 
-为了应对高并发点赞，直接写 MySQL 会造成巨大压力。
+为了应对高并发点赞，直接写 MySQL 会造成巨大压力。  
 **解决方案**: 采用 `Write-Back` (回写) 策略。先在 Redis 中进行原子计数，通过定时任务/异步协程将增量数据同步至 MySQL，实现了性能与最终一致性的平衡。
 
 
 ## 👏 致谢 (Acknowledgements)
 
-本项目的初始架构参考了 [bxcodec/go-clean-arch](https://github.com/bxcodec/go-clean-arch)。  感谢其对 Clean Architecture 的精彩实现与分享。  
+本项目的初始架构参考了 [bxcodec/go-clean-arch](https://github.com/bxcodec/go-clean-arch)。感谢其对 Clean Architecture 的精彩实现与分享。  
 This project structure is adapted from [bxcodec/go-clean-arch](https://github.com/bxcodec/go-clean-arch). Special thanks for the architectural inspiration.

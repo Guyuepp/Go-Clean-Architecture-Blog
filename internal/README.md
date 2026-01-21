@@ -1,7 +1,7 @@
-# Internal Directory Guidelines
+# Internal 目录指南
 
-This directory is designated for internal processes. Golang operates on a package system, where each directory is effectively treated as a package. These packages can be imported into other projects as libraries. To prevent the exposure of detailed implementations, such as database handling or cache management, to the public, these are encapsulated within the internal package.
+此目录专为**内部流程**而设计。Golang 基于包（package）系统运行，每个目录都被视为一个包。这些包可以作为库（library）被导入到其他项目中。为了防止数据库处理或缓存管理等详细实现细节暴露给外部，我们将这些内容封装在 `internal` 包中。
 
-The concept of the internal folder is inspired directly by the Golang compiler. This approach is detailed in the [Release Notes Go 1.4](https://golang.org/doc/go1.4#internalpackages). Consequently, functions, structures, or interfaces within this directory are inaccessible for importation by external projects but remain available for use within this project.
+`internal` 文件夹的概念直接源自 Golang 编译器。这种方法的详细说明可见于 [Go 1.4 发行说明](https://golang.org/doc/go1.4#internalpackages)。因此，该目录下的函数、结构体或接口**无法被外部项目导入**，但仍可供本项目内部使用。
 
-An "external project" refers to any project distinct from the current one. For instance, if there is an authentication service written in Go and this project, the authentication service can incorporate this project as a module/library. However, it will not have visibility into the specific implementations housed within the /internal directory.
+“外部项目”是指当前项目以外的任何项目。例如，如果存在一个用 Go 编写的身份验证服务（Auth Service）和本项目，该身份验证服务可以将本项目作为模块/库引入，但它无法看到或访问 `/internal` 目录下的具体实现。
