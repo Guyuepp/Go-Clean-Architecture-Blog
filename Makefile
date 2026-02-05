@@ -24,43 +24,52 @@ up: dev-env dev-air             ## Startup / Spinup Docker Compose and air
 down: docker-stop               ## Stop Docker
 destroy: docker-teardown clean  ## Teardown (removes volumes, tmp files, etc...)
 
-install-deps: migrate air gotestsum tparse mockery ## Install Development Dependencies (localy).
-deps: $(MIGRATE) $(AIR) $(GOTESTSUM) $(TPARSE) $(MOCKERY) $(GOLANGCI) ## Checks for Global Development Dependencies.
+install-deps: migrate air golangci-lint ## Install Development Dependencies (locally).
+deps: $(MIGRATE) $(AIR) $(GOLANGCI) ## Checks for Global Development Dependencies.
 deps:
 	@echo "Required Tools Are Available"
 
-dev-env: ## Bootstrap Environment (with a Docker-Compose help).
-	@ docker-compose up -d --build mysql
-	docker-compose up -d --build redis
+dev-env: ## Bootstrap Environment (with Docker Compose help).
+	@ docker compose up -d --build mysql
+	@ docker compose up -d --build redis
+	@echo "Waiting for services to be healthy..."
+	@sleep 5
 
-dev-env-test: dev-env ## Run application (within a Docker-Compose help)
+dev-env-test: dev-env ## Run application (within Docker Compose help)
 	@ $(MAKE) image-build
-	docker-compose up web
+	@ docker compose up web
 
-dev-air: $(AIR) ## Starts AIR ( Continuous Development app).
-	air > ./logs
+dev-air: $(AIR) ## Starts AIR (Continuous Development app).
+	@ air
+
+dev-run: ## Run the application directly
+	@ go run ./app/main.go
 
 docker-stop:
-	@ docker-compose down
+	@ docker compose down
 
 docker-teardown:
-	@ docker-compose down --remove-orphans -v
+	@ docker compose down --remove-orphans -v
 
 # ~~~ Code Actions ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 lint: $(GOLANGCI) ## Runs golangci-lint with predefined configuration
 	@echo "Applying linter"
-	golangci-lint version
-	golangci-lint run -c .golangci.yaml ./...
+	@ golangci-lint version
+	@ golangci-lint run -c .golangci.yaml ./...
 
-# -trimpath - will remove the filepathes from the reports, good to same money on network trafic,
+lint-fix: $(GOLANGCI) ## Runs golangci-lint and fixes issues automatically
+	@echo "Applying linter with auto-fix"
+	@ golangci-lint run -c .golangci.yaml --fix ./...
+
+# -trimpath - will remove the filepaths from the reports, good to save money on network traffic,
 #             focus on bug reports, and find issues fast.
 # - race    - adds a racedetector, in case of racecondition, you can catch report with sentry.
 #             https://golang.org/doc/articles/race_detector.html
 #
-# todo(butuzov): add additional flags to compiler to have an `version` flag.
+# todo(butuzov): add additional flags to compiler to have a `version` flag.
 build: ## Builds binary
-	@ printf "Building aplication... "
+	@ printf "Building application... "
 	@ go build \
 		-trimpath  \
 		-o engine \
@@ -69,7 +78,7 @@ build: ## Builds binary
 
 
 build-race: ## Builds binary (with -race flag)
-	@ printf "Building aplication with race flag... "
+	@ printf "Building application with race flag... "
 	@ go build \
 		-trimpath  \
 		-race      \
@@ -77,36 +86,21 @@ build-race: ## Builds binary (with -race flag)
 		./app/
 	@ echo "done"
 
-
-go-generate: $(MOCKERY) ## Runs go generte ./...
-	go generate ./...
-
-
-TESTS_ARGS := --format testname --jsonfile gotestsum.json.out
-TESTS_ARGS += --max-fails 2
-TESTS_ARGS += -- ./...
-TESTS_ARGS += -test.parallel 2
-TESTS_ARGS += -test.count    1
-TESTS_ARGS += -test.failfast
-TESTS_ARGS += -test.coverprofile   coverage.out
-TESTS_ARGS += -test.timeout        5s
-TESTS_ARGS += -race
-
-tests: $(GOTESTSUM)
-	@ gotestsum $(TESTS_ARGS) -short
-
-tests-complete: tests $(TPARSE) ## Run Tests & parse details
-	@cat gotestsum.json.out | $(TPARSE) -all -notests
-
 # ~~~ Docker Build ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .ONESHELL:
-image-build:
+image-build: ## Build Docker image
 	@ echo "Docker Build"
-	@ DOCKER_BUILDKIT=0 docker build \
+	@ docker build \
 		--file Dockerfile \
 		--tag go-clean-arch \
 			.
+
+image-run: image-build ## Build and run Docker image
+	@ docker compose up -d mysql redis
+	@echo "Waiting for database..."
+	@sleep 5
+	@ docker compose up web
 
 # Commenting this as this not relevant for the project, we load the DB data from the SQL file.
 # please refer this when introducing the database schema migrations.
@@ -136,13 +130,36 @@ image-build:
 
 # ~~~ Cleans ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-clean: clean-artifacts clean-docker
+clean: clean-artifacts clean-docker ## Clean all artifacts and docker resources
 
-clean-artifacts: ## Removes Artifacts (*.out)
-	@printf "Cleanning artifacts... "
-	@rm -f *.out
-	@echo "done."
-
+clean-artifacts: ## Removes Artifacts (*.out, engine binary)
+	@ printf "Cleaning artifacts... "
+	@ rm -f *.out engine
+	@ echo "done."
 
 clean-docker: ## Removes dangling docker images
 	@ docker image prune -f
+
+clean-all: clean ## Deep clean including dependencies cache
+	@ go clean -cache -testcache -modcache
+	@ echo "All caches cleared."
+
+fmt: ## Format code with gofmt
+	@ echo "Formatting code..."
+	@ gofmt -s -w .
+	@ echo "done."
+
+vet: ## Run go vet
+	@ echo "Running go vet..."
+	@ go vet ./...
+	@ echo "done."
+
+mod-tidy: ## Tidy go modules
+	@ echo "Tidying go modules..."
+	@ go mod tidy
+	@ echo "done."
+
+mod-download: ## Download go modules
+	@ echo "Downloading go modules..."
+	@ go mod download
+	@ echo "done."
