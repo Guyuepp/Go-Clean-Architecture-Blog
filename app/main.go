@@ -18,6 +18,7 @@ import (
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/repository"
 	mysqlRepo "github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/repository/mysql"
 	myRedisCache "github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/repository/redis"
 	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/workers"
@@ -141,9 +142,16 @@ func main() {
 
 	// Prepare Repository
 	userRepo := mysqlRepo.NewUserRepository(db)
-	articleRepo := mysqlRepo.NewArticleRepository(db)
 	commentRepo := mysqlRepo.NewCommentRepository(db)
+
+	// Article相关的三层架构
+	// 1. DB层
+	articleDBRepo := mysqlRepo.NewArticleDBRepository(db)
+	// 2. Cache层
 	articleCache := myRedisCache.NewArticleCache(client)
+	// 3. Repository协调层
+	articleRepo := repository.NewArticleRepository(articleDBRepo, articleCache, userRepo)
+
 	bloomBitSizeStr := os.Getenv("BLOOM_FILTER_SIZE")
 	bloomBitSize, err := strconv.ParseUint(bloomBitSizeStr, 10, 64)
 	if err != nil {
@@ -156,10 +164,10 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	views_syncer := workers.NewSyncViewWorker(articleRepo, articleCache)
+	views_syncer := workers.NewSyncViewWorker(articleDBRepo, articleCache)
 	go views_syncer.Start(ctx)
 
-	likes_syncer := workers.NewSyncLikesWorker(articleRepo)
+	likes_syncer := workers.NewSyncLikesWorker(articleDBRepo)
 	go likes_syncer.Start(ctx)
 
 	// Build service Layer
@@ -170,7 +178,8 @@ func main() {
 		log.Println("failed to parse JWT TTL, using default 24 hours")
 		jwtTTL = 24
 	}
-	articleSvc := article.NewService(articleRepo, userRepo, articleCache, likes_syncer, bloomRepo)
+	// usecase层只依赖repository接口和cache（用于点赞等特殊操作）
+	articleSvc := article.NewService(articleRepo, articleCache, likes_syncer, bloomRepo)
 	userSvc := user.NewService(userRepo, jwtSecret, time.Duration(jwtTTL)*time.Hour)
 	commentSvc := comment.NewService(commentRepo, bloomRepo)
 	articleHandler := rest.NewArticleHandler(articleSvc)

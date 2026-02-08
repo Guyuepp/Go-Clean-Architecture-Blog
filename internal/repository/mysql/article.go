@@ -16,10 +16,11 @@ type articleRepository struct {
 	DB *gorm.DB
 }
 
-var _ domain.ArticleRepository = (*articleRepository)(nil)
+// mysql层只负责数据库操作
+var _ domain.ArticleDBRepository = (*articleRepository)(nil)
 
-// NewArticleRepository will create an object that represent the article.Repository interface
-func NewArticleRepository(db *gorm.DB) *articleRepository {
+// NewArticleDBRepository 创建数据库操作层
+func NewArticleDBRepository(db *gorm.DB) *articleRepository {
 	return &articleRepository{db}
 }
 

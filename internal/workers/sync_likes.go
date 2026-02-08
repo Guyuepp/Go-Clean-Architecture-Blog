@@ -15,14 +15,14 @@ type LikeTask struct {
 }
 
 type syncLikesWorker struct {
-	ArticleRepo domain.ArticleRepository
-	ch          chan LikeTask
+	ArticleDBRepo domain.ArticleDBRepository
+	ch            chan LikeTask
 }
 
-func NewSyncLikesWorker(ar domain.ArticleRepository) *syncLikesWorker {
+func NewSyncLikesWorker(ar domain.ArticleDBRepository) *syncLikesWorker {
 	return &syncLikesWorker{
-		ArticleRepo: ar,
-		ch:          make(chan LikeTask, 1024),
+		ArticleDBRepo: ar,
+		ch:            make(chan LikeTask, 1024),
 	}
 }
 
@@ -89,5 +89,5 @@ func (s syncLikesWorker) flush(ctx context.Context, batch []LikeTask) {
 			logrus.Errorf("Unsuported action: %v", action)
 		}
 	}
-	_ = s.ArticleRepo.ApplyLikeChanges(ctx, changes)
+	_ = s.ArticleDBRepo.ApplyLikeChanges(ctx, changes)
 }

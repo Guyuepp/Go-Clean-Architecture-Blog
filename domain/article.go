@@ -61,19 +61,41 @@ type ArticleRepository interface {
 	FetchArticlesByLikes(ctx context.Context, limit int64) ([]Article, error)
 
 	FetchIDs(ctx context.Context, cursor, limit int64) ([]int64, error)
+
+	// 热榜相关
+	GetDailyRank(ctx context.Context, limit int64) ([]Article, error)
+	GetHistoryRank(ctx context.Context, limit int64) ([]Article, error)
+}
+
+// ArticleDBRepository 定义纯粹的数据库操作接口
+type ArticleDBRepository interface {
+	// DB operations only
+	GetByID(ctx context.Context, id int64) (Article, error)
+	GetByIDs(ctx context.Context, ids []int64) ([]Article, error)
+	GetByTitle(ctx context.Context, title string) (Article, error)
+	Store(ctx context.Context, a *Article) error
+	Update(ctx context.Context, ar *Article) error
+	Delete(ctx context.Context, id int64) error
+	Fetch(ctx context.Context, cursor string, num int64) ([]Article, error)
+	AddViews(ctx context.Context, id int64, deltaViews int64) error
+	AddLikes(ctx context.Context, id int64, deltaLikes int64) error
+	ApplyLikeChanges(ctx context.Context, changes LikeStateChanges) error
+	FetchUserLikedArticles(ctx context.Context, uid int64, limit int64) ([]int64, error)
+	FetchArticlesByLikes(ctx context.Context, limit int64) ([]Article, error)
+	FetchIDs(ctx context.Context, cursor, limit int64) ([]int64, error)
 }
 
 type ArticleCache interface {
-	// Article related
-	GetHome(context.Context) ([]Article, error)
-	SetHome(context.Context, []Article) error
-	GetArticle(ctx context.Context, id int64) (res Article, err error)
-	GetArticleByIDs(ctx context.Context, ids []int64) (res []Article, err error)
-	SetArticle(ctx context.Context, ar *Article) (err error)
-	BatchSetArticle(ctx context.Context, ars []Article) error
+	// Article related - 支持逻辑过期
+	GetHomeWithLogicalExpire(context.Context) ([]Article, bool, error) // 返回数据、是否过期、错误
+	SetHomeWithLogicalExpire(context.Context, []Article, time.Duration) error
+	GetArticleWithLogicalExpire(ctx context.Context, id int64) (Article, bool, error)
+	GetArticleByIDsWithLogicalExpire(ctx context.Context, ids []int64) ([]Article, error)
+	SetArticleWithLogicalExpire(ctx context.Context, ar *Article, ttl time.Duration) error
+	BatchSetArticleWithLogicalExpire(ctx context.Context, ars []Article, ttl time.Duration) error
 
 	// Del delete article, views and likes in cache
-	DeleteArticle(ctx context.Context, id int64) (err error)
+	DeleteArticle(ctx context.Context, id int64) error
 
 	// Views related
 	IncrViews(ctx context.Context, id int64) (views int64, err error)
@@ -91,10 +113,12 @@ type ArticleCache interface {
 	IsLikedBatch(ctx context.Context, userID int64, articleIDs []int64) (map[int64]bool, error)
 	SetUserLikedArticles(ctx context.Context, UserID int64, articleIDs []int64) error
 
+	GetDailyRankWithLogicalExpire(ctx context.Context, limit int64) ([]Article, bool, error) // 支持逻辑过期
+	SetDailyRankWithLogicalExpire(ctx context.Context, articles []Article, ttl time.Duration) error
 	GetDailyRank(ctx context.Context, limit int64) ([]Article, error)
 	IncrDailyRankScore(ctx context.Context, aid int64, scoreDelta float64) error
 	GetHistoryRank(ctx context.Context, limit int64) ([]Article, error)
-	SetHistoryRank(ctx context.Context, articleIDs []int64, scores []float64) error
+	SetHistoryRankWithLogicalExpire(ctx context.Context, articleIDs []int64, scores []float64, ttl time.Duration) error
 }
 
 type ArticleUsecase interface {

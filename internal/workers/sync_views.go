@@ -10,14 +10,14 @@ import (
 )
 
 type SyncViewsWorker struct {
-	ArticleRepo  domain.ArticleRepository
-	ArticleCache domain.ArticleCache
+	ArticleDBRepo domain.ArticleDBRepository
+	ArticleCache  domain.ArticleCache
 }
 
-func NewSyncViewWorker(ar domain.ArticleRepository, ac domain.ArticleCache) *SyncViewsWorker {
+func NewSyncViewWorker(ar domain.ArticleDBRepository, ac domain.ArticleCache) *SyncViewsWorker {
 	return &SyncViewsWorker{
-		ArticleRepo:  ar,
-		ArticleCache: ac,
+		ArticleDBRepo: ar,
+		ArticleCache:  ac,
 	}
 }
 
@@ -71,7 +71,7 @@ func (s *SyncViewsWorker) syncViews(ctx context.Context) {
 	}
 
 	for id, view := range views {
-		err = s.ArticleRepo.AddViews(ctx, id, view)
+		err = s.ArticleDBRepo.AddViews(ctx, id, view)
 		if err != nil {
 			logrus.Warnf("failed to update views: %v", err)
 			continue

@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/Guyuepp/Go-Clean-Architecture-Blog/domain"
+	"github.com/Guyuepp/Go-Clean-Architecture-Blog/internal/repository/cache"
 	"github.com/redis/go-redis/v9"
 	"github.com/sirupsen/logrus"
 )
@@ -37,45 +38,83 @@ func NewArticleCache(client *redis.Client) *articleCache {
 	}
 }
 
-func (c *articleCache) GetHome(ctx context.Context) ([]domain.Article, error) {
+// GetHomeWithLogicalExpire 获取首页数据，支持逻辑过期检测
+// 返回: 数据、是否逻辑过期、错误
+func (c *articleCache) GetHomeWithLogicalExpire(ctx context.Context) ([]domain.Article, bool, error) {
 	key := KeyHome
 	data, err := c.client.Get(ctx, key).Bytes()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	var res []domain.Article
-	err = json.Unmarshal([]byte(data), &res)
+
+	var wrapper cache.DataWithLogicalExpire
+	err = json.Unmarshal(data, &wrapper)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return res, nil
+
+	// 解析实际数据
+	articlesJSON, err := json.Marshal(wrapper.Data)
+	if err != nil {
+		return nil, false, err
+	}
+
+	var articles []domain.Article
+	err = json.Unmarshal(articlesJSON, &articles)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// 检查是否逻辑过期
+	isExpired := wrapper.IsLogicalExpired()
+	return articles, isExpired, nil
 }
 
-func (c *articleCache) SetHome(ctx context.Context, ars []domain.Article) error {
+// SetHomeWithLogicalExpire 设置首页数据，使用逻辑过期
+func (c *articleCache) SetHomeWithLogicalExpire(ctx context.Context, ars []domain.Article, ttl time.Duration) error {
 	key := KeyHome
-	data, err := json.Marshal(ars)
+	wrapper := cache.NewDataWithLogicalExpire(ars, ttl)
+	data, err := json.Marshal(wrapper)
 	if err != nil {
 		return err
 	}
-	err = c.client.Set(ctx, key, data, 1*time.Minute).Err()
+	// 物理永不过期（或设置很长时间），避免缓存击穿
+	err = c.client.Set(ctx, key, data, 24*time.Hour).Err()
 	return err
 }
 
-func (c *articleCache) GetArticle(ctx context.Context, id int64) (res domain.Article, err error) {
+// GetArticleWithLogicalExpire 获取文章，支持逻辑过期
+func (c *articleCache) GetArticleWithLogicalExpire(ctx context.Context, id int64) (domain.Article, bool, error) {
 	key := fmt.Sprintf(KeyArticles, id)
 	data, err := c.client.Get(ctx, key).Bytes()
 	if errors.Is(err, redis.Nil) {
-		return domain.Article{}, redis.Nil
+		return domain.Article{}, false, redis.Nil
 	} else if err != nil {
-		return domain.Article{}, err
+		return domain.Article{}, false, err
 	}
-	if err = json.Unmarshal(data, &res); err != nil {
-		return domain.Article{}, err
+
+	var wrapper cache.DataWithLogicalExpire
+	if err = json.Unmarshal(data, &wrapper); err != nil {
+		return domain.Article{}, false, err
 	}
-	return
+
+	// 解析实际文章数据
+	articleJSON, err := json.Marshal(wrapper.Data)
+	if err != nil {
+		return domain.Article{}, false, err
+	}
+
+	var article domain.Article
+	if err = json.Unmarshal(articleJSON, &article); err != nil {
+		return domain.Article{}, false, err
+	}
+
+	isExpired := wrapper.IsLogicalExpired()
+	return article, isExpired, nil
 }
 
-func (c *articleCache) GetArticleByIDs(ctx context.Context, ids []int64) (res []domain.Article, err error) {
+// GetArticleByIDsWithLogicalExpire 批量获取文章（支持逻辑过期）
+func (c *articleCache) GetArticleByIDsWithLogicalExpire(ctx context.Context, ids []int64) ([]domain.Article, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
@@ -96,27 +135,40 @@ func (c *articleCache) GetArticleByIDs(ctx context.Context, ids []int64) (res []
 			continue
 		}
 
-		var ar domain.Article
 		if str, ok := val.(string); ok {
-			_ = json.Unmarshal([]byte(str), &ar)
-			articles = append(articles, ar)
+			var wrapper cache.DataWithLogicalExpire
+			if err := json.Unmarshal([]byte(str), &wrapper); err != nil {
+				continue
+			}
+
+			articleJSON, _ := json.Marshal(wrapper.Data)
+			var ar domain.Article
+			if err := json.Unmarshal(articleJSON, &ar); err != nil {
+				continue
+			}
+
+			if !wrapper.IsLogicalExpired() {
+				articles = append(articles, ar)
+			}
 		}
 	}
 
 	return articles, nil
 }
 
-func (c *articleCache) SetArticle(ctx context.Context, ar *domain.Article) (err error) {
+// SetArticleWithLogicalExpire 设置文章缓存，使用逻辑过期
+func (c *articleCache) SetArticleWithLogicalExpire(ctx context.Context, ar *domain.Article, ttl time.Duration) error {
 	key := fmt.Sprintf(KeyArticles, ar.ID)
-	data, err := json.Marshal(ar)
+	wrapper := cache.NewDataWithLogicalExpire(ar, ttl)
+	data, err := json.Marshal(wrapper)
 	if err != nil {
-		return
+		return err
 	}
-	err = c.client.Set(ctx, key, data, 10*time.Minute).Err()
-	return
+	return c.client.Set(ctx, key, data, 24*time.Hour).Err()
 }
 
-func (c *articleCache) BatchSetArticle(ctx context.Context, ars []domain.Article) error {
+// BatchSetArticleWithLogicalExpire 批量设置文章缓存
+func (c *articleCache) BatchSetArticleWithLogicalExpire(ctx context.Context, ars []domain.Article, ttl time.Duration) error {
 	if len(ars) == 0 {
 		return nil
 	}
@@ -124,7 +176,8 @@ func (c *articleCache) BatchSetArticle(ctx context.Context, ars []domain.Article
 	iar := make([]any, 0, 2*len(ars))
 	var errMarshal error = nil
 	for i := range ars {
-		data, err := json.Marshal(ars[i])
+		wrapper := cache.NewDataWithLogicalExpire(ars[i], ttl)
+		data, err := json.Marshal(wrapper)
 		if err != nil {
 			logrus.Warnf("failed to marshal article for cache, ID: %d, err: %v", ars[i].ID, err)
 			errMarshal = err
@@ -165,25 +218,21 @@ func (c *articleCache) FetchAndResetViews(ctx context.Context) (map[int64]int64,
 	`)
 	result := make(map[int64]int64)
 
-	// 执行 Lua 脚本
-	// KEYS[1] 是 KeyViewsBuffer, KEYS[2] 是 KeyViewsProcessing
+	// KEYS[1] = KeyViewsBuffer, KEYS[2] = KeyViewsProcessing
 	val, err := script.Run(ctx, c.client, []string{KeyViewsBuffer, KeyViewsProcessing}).Result()
 
 	if err != nil {
-		// 如果 Lua 脚本返回 nil (即 key 不存在)，go-redis 会返回 redis.Nil 错误
 		if errors.Is(err, redis.Nil) {
 			return result, nil
 		}
 		return nil, err
 	}
 
-	// Lua 的 HGETALL 返回的是平铺切片 [key1, val1, key2, val2...]
 	data, ok := val.([]any)
 	if !ok {
 		return result, nil
 	}
 
-	// 解析切片到 Map
 	for i := 0; i < len(data); i += 2 {
 		idStr, _ := data[i].(string)
 		viewsStr, _ := data[i+1].(string)
@@ -375,6 +424,33 @@ func (c *articleCache) GetDailyRank(ctx context.Context, limit int64) ([]domain.
 	return c.fetchRankFromKey(ctx, KeyHotDailyAggreGatedRank, limit)
 }
 
+// GetDailyRankWithLogicalExpire 获取每日热榜，支持逻辑过期
+func (c *articleCache) GetDailyRankWithLogicalExpire(ctx context.Context, limit int64) ([]domain.Article, bool, error) {
+	data, err := c.client.Get(ctx, KeyHotDailyAggreGatedRank+"_logical").Bytes()
+	if err == nil {
+		var wrapper cache.DataWithLogicalExpire
+		if err := json.Unmarshal(data, &wrapper); err == nil {
+			articlesJSON, _ := json.Marshal(wrapper.Data)
+			var articles []domain.Article
+			if err := json.Unmarshal(articlesJSON, &articles); err == nil {
+				return articles, wrapper.IsLogicalExpired(), nil
+			}
+		}
+	}
+
+	return nil, false, redis.Nil
+}
+
+// SetDailyRankWithLogicalExpire 设置每日热榜，使用逻辑过期
+func (c *articleCache) SetDailyRankWithLogicalExpire(ctx context.Context, articles []domain.Article, ttl time.Duration) error {
+	wrapper := cache.NewDataWithLogicalExpire(articles, ttl)
+	data, err := json.Marshal(wrapper)
+	if err != nil {
+		return err
+	}
+	return c.client.Set(ctx, KeyHotDailyAggreGatedRank+"_logical", data, 24*time.Hour).Err()
+}
+
 func (c *articleCache) fetchRankFromKey(ctx context.Context, key string, limit int64) ([]domain.Article, error) {
 	zRes, err := c.client.ZRevRangeWithScores(ctx, key, 0, limit-1).Result()
 	if err != nil {
@@ -418,6 +494,30 @@ func (c *articleCache) SetHistoryRank(ctx context.Context, aids []int64, scores 
 	}
 
 	return c.client.ZAdd(ctx, KeyHotHistoryRank, zMem...).Err()
+}
+
+// SetHistoryRankWithLogicalExpire 设置历史热榜，使用逻辑过期
+func (c *articleCache) SetHistoryRankWithLogicalExpire(ctx context.Context, aids []int64, scores []float64, ttl time.Duration) error {
+	if len(aids) != len(scores) || len(aids) == 0 {
+		return domain.ErrBadParamInput
+	}
+
+	// 构建Article列表
+	articles := make([]domain.Article, len(aids))
+	for i := range aids {
+		articles[i] = domain.Article{
+			ID:    aids[i],
+			Likes: int64(scores[i]),
+		}
+	}
+
+	wrapper := cache.NewDataWithLogicalExpire(articles, ttl)
+	data, err := json.Marshal(wrapper)
+	if err != nil {
+		return err
+	}
+
+	return c.client.Set(ctx, KeyHotHistoryRank+"_logical", data, 24*time.Hour).Err()
 }
 
 func (c *articleCache) GetLikeCount(ctx context.Context, aid int64) (int64, error) {
